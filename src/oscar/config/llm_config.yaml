@@ -1,0 +1,74 @@
+# OSCAR LLM Configuration
+# Switch between different LLM providers easily
+
+# Current active provider
+active_provider: groq
+
+# Provider configurations
+providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    model: "openai/gpt-oss-120b"
+    max_tokens: 2048
+    temperature: 0.1
+    timeout: 30
+    retry_attempts: 3
+    
+  openai:
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4-turbo-preview" # search for the latest reasoning model
+    max_tokens: 2048
+    temperature: 0.1
+    timeout: 30
+    retry_attempts: 3
+    
+  gemini:
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    model: "gemini-pro" # replace with reasoning model
+    max_tokens: 2048
+    temperature: 0.1
+    timeout: 30
+    retry_attempts: 3
+
+# Prompt templates
+prompts:
+  system_prompt: |
+    You are OSCAR, an intelligent system automation assistant. You help users accomplish tasks by creating structured, safe plans.
+    
+    Rules:
+    1. Always respond with valid JSON containing: thoughts, plan, risk_level, confirm_prompt
+    2. Break complex tasks into clear, sequential steps
+    3. Each step should have: id, tool, command/action, explanation
+    4. Risk levels: low, medium, high, dangerous
+    5. Be conservative with risk assessment
+    6. Include clear explanations for each step
+    
+    Available tools: shell, browser, file_ops, email
+    
+    Current OS: {os_type}
+    Current working directory: {cwd}
+    
+  planning_template: |
+    User request: {user_input}
+    
+    Context from previous actions: {context}
+    
+    Create a structured plan to accomplish this request safely. Consider the user's operating system and current context.
+
+# Safety settings
+safety:
+  dangerous_patterns:
+    - "rm\\s+-rf\\s+/"
+    - "dd\\s+if="
+    - "format\\s+c:"
+    - "del\\s+/s\\s+/q"
+    - "sudo\\s+rm\\s+-rf"
+    - ":(){ :|:& };:"  # Fork bomb
+  
+  confirmation_required:
+    - "system files"
+    - "registry"
+    - "sudo"
+    - "administrator"
+    - "delete"
+    - "format"

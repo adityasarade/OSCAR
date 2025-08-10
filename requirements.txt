@@ -1,0 +1,26 @@
+# Core dependencies
+groq>=0.4.1                    # Groq API client
+pyyaml>=6.0                    # YAML configuration parsing
+python-dotenv>=1.0.0           # Environment variable management
+pydantic>=2.0.0                # Data validation and settings
+click>=8.1.0                   # CLI framework
+
+# Speech processing
+vosk>=0.3.45                   # Local speech-to-text
+pyaudio>=0.2.11                # Audio input/output
+sounddevice>=0.4.6             # Alternative audio interface
+
+# Web automation
+playwright>=1.40.0             # Modern browser automation
+requests>=2.31.0               # HTTP requests
+beautifulsoup4>=4.12.0         # HTML parsing
+
+# Vector store and memory
+faiss-cpu>=1.7.4               # CPU-only vector similarity search
+sentence-transformers>=2.2.0   # Text embeddings
+numpy>=1.24.0                  # Numerical operations
+
+# Utilities
+colorama>=0.4.6                # Cross-platform colored terminal text
+rich>=13.0.0                   # Rich text and beautiful formatting
+psutil>=5.9.0                  # System and process utilities

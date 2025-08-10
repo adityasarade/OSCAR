@@ -1,0 +1,2 @@
+[console_scripts]
+oscar = oscar.cli.main:main
