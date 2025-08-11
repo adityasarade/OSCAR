@@ -24,9 +24,9 @@ setup(
     description="Operating System's Complete Agentic Rex - An intelligent agent for safe system automation",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="Your Name",  # Update with your details
-    author_email="your.email@example.com",  # Update with your email
-    url="https://github.com/yourusername/oscar",  # Update with your repo URL
+    author="Asterix",
+    author_email="aditya.sarade2003@gmail.com",
+    url="https://github.com/adityasarade/OSCAR",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     include_package_data=True,

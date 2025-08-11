@@ -107,7 +107,7 @@ class OSCARSettings:
                 },
                 "openai": {
                     "base_url": "https://api.openai.com/v1",
-                    "model": "gpt-4-turbo-preview",
+                    "model": "gpt-4o-mini",
                     "max_tokens": 2048,
                     "temperature": 0.1,
                     "timeout": 30,
