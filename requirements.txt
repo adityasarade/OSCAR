@@ -4,6 +4,7 @@ pyyaml>=6.0                    # YAML configuration parsing
 python-dotenv>=1.0.0           # Environment variable management
 pydantic>=2.0.0                # Data validation and settings
 click>=8.1.0                   # CLI framework
+openai                         # OpenAI API client
 
 # Speech processing
 vosk>=0.3.45                   # Local speech-to-text

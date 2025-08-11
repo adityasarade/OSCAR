@@ -56,17 +56,23 @@ def display_help():
 • [cyan]config[/cyan] - Show current configuration
 • [cyan]status[/cyan] - Check system status
 • [cyan]test[/cyan] - Test LLM connection
+• [cyan]test-agent[/cyan] - Test full agent components
+• [cyan]session[/cyan] - Show current session info
 • [cyan]quit[/cyan] or [cyan]exit[/cyan] - Exit OSCAR
 
-[bold]Usage Examples:[/bold]
-• Type your request in natural language
-• Use voice input with [cyan]voice[/cyan] command (coming soon)
-• Multi-step tasks will show a plan for your approval
+[bold]Natural Language Usage:[/bold]
+• Just type your request in plain English
+• Examples:
+  - "Create a new Python project"
+  - "Download the latest Python installer"
+  - "Clean up my Downloads folder"
+  - "Show me system information"
 
 [bold]Safety Features:[/bold]
 • All actions require explicit confirmation
 • Dangerous commands are flagged and require extra confirmation
-• Dry-run mode available for testing
+• Dry-run mode available for testing (use --dry-run flag)
+• Complete audit trail of all actions
 """
     console.print(help_text)
 
@@ -135,10 +141,15 @@ def main(debug, dry_run, config_check):
                 elif user_input.lower() == 'test':
                     test_llm_connection()
                     
+                elif user_input.lower() == 'test-agent':
+                    test_full_agent()
+                    
+                elif user_input.lower() == 'session':
+                    show_session_info()
+                    
                 else:
-                    # This is where we'll integrate the agent later
-                    console.print(f"[yellow]Received:[/yellow] {user_input}")
-                    console.print("[dim]Agent processing not implemented yet. Coming in next phase![/dim]")
+                    # Process natural language input through OSCAR agent
+                    process_user_request(user_input)
                     
             except KeyboardInterrupt:
                 console.print("\n[yellow]Use 'quit' or 'exit' to leave OSCAR[/yellow]")
@@ -232,6 +243,62 @@ def test_llm_connection():
         
     except Exception as e:
         console.print(f"[red]✗[/red] LLM connection failed: {e}")
+
+def test_full_agent():
+    """Test all agent components."""
+    console.print("[bold blue]🧪 Testing OSCAR Agent Components...[/bold blue]\n")
+    
+    try:
+        from oscar.core.agent import OSCARAgent
+        agent = OSCARAgent()
+        test_results = agent.test_all_components()
+        
+        if test_results["overall"]["ready"]:
+            console.print("\n[bold green]🎉 OSCAR is ready for natural language requests![/bold green]")
+        else:
+            console.print("\n[bold red]⚠️  Some issues detected. Check configuration.[/bold red]")
+            
+    except Exception as e:
+        console.print(f"[red]✗[/red] Agent test failed: {e}")
+
+def show_session_info():
+    """Show current session information."""
+    try:
+        # This would typically come from a global agent instance
+        console.print("[dim]Session info coming soon...[/dim]")
+        console.print("Current session: Local CLI session")
+        console.print(f"Started: Just now")
+        console.print("Commands processed: 0")
+        
+    except Exception as e:
+        console.print(f"[red]Error getting session info: {e}[/red]")
+
+def process_user_request(user_input: str):
+    """Process natural language user request through OSCAR agent."""
+    try:
+        from oscar.core.agent import OSCARAgent
+        
+        # Create agent instance (in real app, this would be persistent)
+        agent = OSCARAgent()
+        
+        # Process the request
+        result = agent.process_request(user_input)
+        
+        # Display results summary
+        if result["success"]:
+            console.print(f"\n[bold green]✅ Request completed successfully![/bold green]")
+        elif result["stage"] == "rejected":
+            console.print(f"\n[yellow]⚠️  Plan was rejected by user[/yellow]")
+        else:
+            console.print(f"\n[red]❌ Request failed at {result['stage']} stage[/red]")
+            if result.get("error"):
+                console.print(f"[red]Error: {result['error']}[/red]")
+        
+    except Exception as e:
+        console.print(f"[red]Error processing request: {e}[/red]")
+        if settings.debug_mode:
+            import traceback
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main()

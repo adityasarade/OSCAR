@@ -7,6 +7,9 @@ src/oscar/config/__init__.py
 src/oscar/config/llm_config.yaml
 src/oscar/config/settings.py
 src/oscar/core/__init__.py
+src/oscar/core/agent.py
+src/oscar/core/planner.py
+src/oscar/core/safety.py
 src/oscar_agent.egg-info/PKG-INFO
 src/oscar_agent.egg-info/SOURCES.txt
 src/oscar_agent.egg-info/dependency_links.txt
