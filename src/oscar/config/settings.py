@@ -44,11 +44,9 @@ class OSCARSettings:
     
     def __init__(self):
         self.project_root = self._find_project_root()
-        self.config_dir = self.project_root / "config"
         
-        # If config dir doesn't exist at root, create it
-        if not self.config_dir.exists():
-            self.config_dir.mkdir(exist_ok=True)
+        # Config directory should be in src/oscar/config (same location as this file)
+        self.config_dir = Path(__file__).parent
         
         self.data_dir = Path(os.getenv("OSCAR_DATA_DIR", "./data"))
         
