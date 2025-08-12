@@ -77,11 +77,37 @@ class OSCARAgent:
         self.safety_scanner = SafetyScanner()
         self.session = AgentSession()
         
+        # Initialize tools
+        self._init_tools()
+        
         # Initialize audit logging
         self.audit_log_path = settings.data_dir / "logs" / "audit.jsonl"
         self.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
         
-        console.print("[dim]OSCAR Agent initialized and ready[/dim]")
+        console.print("[dim]OSCAR Agent initialized with tools ready[/dim]")
+    
+    def _init_tools(self):
+        """Initialize and register all tools."""
+        from oscar.tools.base import tool_registry
+        from oscar.tools.shell import ShellTool
+        from oscar.tools.browser import BrowserTool
+        from oscar.tools.file_ops import FileOpsTool
+        
+        # Create LLM client for agentic tools
+        try:
+            from groq import Groq
+            api_key = settings.get_api_key(settings.llm_config.active_provider)
+            llm_client = Groq(api_key=api_key)
+        except:
+            llm_client = None
+            console.print("[yellow]Warning: LLM client not available for agentic tools[/yellow]")
+        
+        # Register tools
+        tool_registry.register_tool(ShellTool())
+        tool_registry.register_tool(BrowserTool(llm_client=llm_client))
+        tool_registry.register_tool(FileOpsTool())
+        
+        self.tools = tool_registry
     
     def process_request(self, user_input: str) -> Dict[str, Any]:
         """
@@ -173,8 +199,7 @@ class OSCARAgent:
     
     def _execute_plan(self, plan: AgentPlan) -> Dict[str, Any]:
         """
-        Execute the approved plan. 
-        Currently a placeholder - will implement actual tools later.
+        Execute the approved plan using appropriate tools.
         """
         
         execution_result = {
@@ -207,27 +232,102 @@ class OSCARAgent:
                 execution_result["success"] = True
                 return execution_result
             
-            # Real execution (placeholder for now)
-            console.print("[yellow]⚠️  Tool execution not yet implemented[/yellow]")
-            console.print("[dim]This will be implemented in Phase 2 (Tools Layer)[/dim]")
+            # Real execution with tools
+            console.print("[green]🔧 Executing plan with tools...[/green]")
             
-            # For now, mark as successful but not executed
             for step in plan.plan:
-                step_result = {
-                    "step_id": step.id,
-                    "tool": step.tool, 
-                    "command": step.command,
-                    "status": "pending",
-                    "output": "Tool execution not yet implemented",
-                    "duration": 0
-                }
-                execution_result["step_results"].append(step_result)
+                console.print(f"\n[blue]Step {step.id}:[/blue] {step.explanation}")
+                console.print(f"[dim]Tool: {step.tool} | Command: {step.command}[/dim]")
+                
+                # Get the appropriate tool
+                tool = self.tools.get_tool(step.tool)
+                if not tool:
+                    # Try to suggest a tool if exact match not found
+                    tool = self.tools.suggest_tool_for_command(step.command)
+                
+                if not tool:
+                    step_result = {
+                        "step_id": step.id,
+                        "tool": step.tool,
+                        "command": step.command,
+                        "status": "failed",
+                        "output": "",
+                        "error": f"Tool '{step.tool}' not available",
+                        "duration": 0
+                    }
+                    execution_result["step_results"].append(step_result)
+                    execution_result["error"] = f"Tool '{step.tool}' not available for step {step.id}"
+                    break
+                
+                if not tool.is_available:
+                    step_result = {
+                        "step_id": step.id,
+                        "tool": step.tool,
+                        "command": step.command,
+                        "status": "failed",
+                        "output": "",
+                        "error": f"Tool '{step.tool}' not available on this system",
+                        "duration": 0
+                    }
+                    execution_result["step_results"].append(step_result)
+                    execution_result["error"] = f"Tool '{step.tool}' not available on this system"
+                    break
+                
+                # Execute the step
+                try:
+                    with console.status(f"[green]Executing step {step.id}..."):
+                        tool_result = tool.execute(step.command)
+                    
+                    # Display result
+                    if tool_result.success:
+                        console.print(f"[green]✓[/green] {tool_result.output}")
+                        if tool_result.error:
+                            console.print(f"[yellow]Warning:[/yellow] {tool_result.error}")
+                    else:
+                        console.print(f"[red]✗[/red] {tool_result.error}")
+                    
+                    # Store result
+                    step_result = {
+                        "step_id": step.id,
+                        "tool": step.tool,
+                        "command": step.command,
+                        "status": "success" if tool_result.success else "failed",
+                        "output": tool_result.output,
+                        "error": tool_result.error,
+                        "duration": tool_result.execution_time,
+                        "metadata": tool_result.metadata
+                    }
+                    execution_result["step_results"].append(step_result)
+                    
+                    if tool_result.success:
+                        execution_result["steps_completed"] += 1
+                    else:
+                        # Stop on first failure unless continue_on_error is set
+                        execution_result["error"] = f"Step {step.id} failed: {tool_result.error}"
+                        break
+                        
+                except Exception as e:
+                    step_result = {
+                        "step_id": step.id,
+                        "tool": step.tool,
+                        "command": step.command,
+                        "status": "error",
+                        "output": "",
+                        "error": f"Execution error: {str(e)}",
+                        "duration": 0
+                    }
+                    execution_result["step_results"].append(step_result)
+                    execution_result["error"] = f"Step {step.id} execution error: {str(e)}"
+                    break
             
-            execution_result["success"] = True
-            execution_result["steps_completed"] = len(plan.plan)
+            # Determine overall success
+            execution_result["success"] = (
+                execution_result["steps_completed"] == execution_result["total_steps"]
+                and execution_result["error"] is None
+            )
             
         except Exception as e:
-            execution_result["error"] = str(e)
+            execution_result["error"] = f"Execution engine error: {str(e)}"
             console.print(f"[red]Execution error: {e}[/red]")
         
         return execution_result
@@ -372,6 +472,35 @@ class OSCARAgent:
         except Exception as e:
             test_results["safety_scanner"] = {"status": "error", "details": {"error": str(e)}}
             console.print(f"[red]✗[/red] Safety Scanner: {e}")
+        
+        # Test Tools
+        try:
+            console.print("Testing Available Tools...")
+            available_tools = self.tools.get_available_tools()
+            tool_status = {}
+            
+            for tool in available_tools:
+                tool_status[tool.name] = {
+                    "available": tool.is_available,
+                    "capabilities": [cap.value for cap in tool.capabilities],
+                    "description": tool.description
+                }
+            
+            test_results["tools"] = {
+                "status": "success" if available_tools else "error",
+                "details": {
+                    "count": len(available_tools),
+                    "tools": tool_status
+                }
+            }
+            
+            console.print(f"[green]✓[/green] Tools: {len(available_tools)} available")
+            for tool in available_tools:
+                console.print(f"  • {tool.name}: {tool.description}")
+            
+        except Exception as e:
+            test_results["tools"] = {"status": "error", "details": {"error": str(e)}}
+            console.print(f"[red]✗[/red] Tools: {e}")
         
         # Test Configuration
         try:
