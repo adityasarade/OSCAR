@@ -1,17 +1,18 @@
 """
 OSCAR Configuration Management
-Handles loading and validation of configuration from YAML and environment variables.
+Simplified configuration loading and validation.
 """
 
 import os
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
+from typing import Dict, Any
+from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
+
 
 class LLMProviderConfig(BaseModel):
     """Configuration for a single LLM provider."""
@@ -20,74 +21,46 @@ class LLMProviderConfig(BaseModel):
     max_tokens: int = 2048
     temperature: float = 0.1
     timeout: int = 30
-    retry_attempts: int = 3
 
-class SafetyConfig(BaseModel):
-    """Safety configuration settings."""
-    dangerous_patterns: list[str] = Field(default_factory=list)
-    confirmation_required: list[str] = Field(default_factory=list)
-
-class PromptsConfig(BaseModel):
-    """Prompt templates configuration."""
-    system_prompt: str
-    planning_template: str
 
 class LLMConfig(BaseModel):
     """Complete LLM configuration."""
     active_provider: str
     providers: Dict[str, LLMProviderConfig]
-    prompts: PromptsConfig
-    safety: SafetyConfig
+    system_prompt: str
+    planning_template: str
+
 
 class OSCARSettings:
     """Main configuration class for OSCAR."""
     
     def __init__(self):
-        self.project_root = self._find_project_root()
-        
-        # Config directory should be in src/oscar/config (same location as this file)
+        # Project structure: src/oscar/config/settings.py
         self.config_dir = Path(__file__).parent
-        
+        self.project_root = self.config_dir.parent.parent.parent
         self.data_dir = Path(os.getenv("OSCAR_DATA_DIR", "./data"))
         
-        # Ensure directories exist
-        self.data_dir.mkdir(exist_ok=True)
-        (self.data_dir / "models").mkdir(exist_ok=True)
-        (self.data_dir / "memory").mkdir(exist_ok=True)
-        (self.data_dir / "logs").mkdir(exist_ok=True)
+        # Ensure data directories exist
+        self._create_data_dirs()
         
-        # Load configurations
+        # Load LLM configuration
         self.llm_config = self._load_llm_config()
-        
-    def _find_project_root(self) -> Path:
-        """Find the project root directory by looking for key files."""
-        current = Path(__file__).parent
-        # Go up until we find the project root (contains requirements.txt or .git)
-        while current != current.parent:
-            if (current / "requirements.txt").exists() or (current / ".git").exists():
-                return current
-            current = current.parent
-        
-        # If not found, use current working directory
-        cwd = Path.cwd()
-        if (cwd / "requirements.txt").exists() or (cwd / ".git").exists():
-            return cwd
-        
-        # Last resort: assume we're in src/oscar/config, so go up 3 levels
-        return Path(__file__).parent.parent.parent.parent
+    
+    def _create_data_dirs(self):
+        """Create required data directories."""
+        for subdir in ["models", "memory", "logs", "downloads"]:
+            (self.data_dir / subdir).mkdir(parents=True, exist_ok=True)
     
     def _load_llm_config(self) -> LLMConfig:
         """Load LLM configuration from YAML file."""
         config_path = self.config_dir / "llm_config.yaml"
         
         if not config_path.exists():
-            # Create default config if it doesn't exist
             self._create_default_config(config_path)
         
         with open(config_path, 'r', encoding='utf-8') as f:
             config_data = yaml.safe_load(f)
         
-        # Validate and parse configuration
         return LLMConfig(**config_data)
     
     def _create_default_config(self, config_path: Path):
@@ -100,36 +73,36 @@ class OSCARSettings:
                     "model": "openai/gpt-oss-120b",
                     "max_tokens": 2048,
                     "temperature": 0.1,
-                    "timeout": 30,
-                    "retry_attempts": 3
+                    "timeout": 30
                 },
                 "openai": {
-                    "base_url": "https://api.openai.com/v1",
+                    "base_url": "https://api.openai.com/v1", 
                     "model": "gpt-4o-mini",
                     "max_tokens": 2048,
                     "temperature": 0.1,
-                    "timeout": 30,
-                    "retry_attempts": 3
+                    "timeout": 30
                 }
             },
-            "prompts": {
-                "system_prompt": "You are OSCAR, an intelligent system automation assistant. Always respond with valid JSON containing: thoughts, plan, risk_level, confirm_prompt",
-                "planning_template": "User request: {user_input}\n\nCreate a structured plan to accomplish this request safely."
-            },
-            "safety": {
-                "dangerous_patterns": [
-                    "rm\\s+-rf\\s+/",
-                    "dd\\s+if=",
-                    "format\\s+c:",
-                    "del\\s+/s\\s+/q"
-                ],
-                "confirmation_required": [
-                    "system files",
-                    "registry", 
-                    "sudo",
-                    "delete"
-                ]
-            }
+            "system_prompt": """You are OSCAR, an intelligent system automation assistant. You help users accomplish tasks by creating structured, safe plans.
+
+Rules:
+1. Always respond with valid JSON containing: thoughts, plan, risk_level, confirm_prompt
+2. Break complex tasks into clear, sequential steps
+3. Each step should have: id, tool, command/action, explanation
+4. Risk levels: low, medium, high, dangerous
+5. Be conservative with risk assessment
+6. Include clear explanations for each step
+
+Available tools: shell, browser, file_ops
+
+Current OS: {os_type}
+Current working directory: {cwd}""",
+            
+            "planning_template": """User request: {user_input}
+
+Context from previous actions: {context}
+
+Create a structured plan to accomplish this request safely. Consider the user's operating system and current context."""
         }
         
         with open(config_path, 'w', encoding='utf-8') as f:
@@ -145,13 +118,12 @@ class OSCARSettings:
     
     def get_api_key(self, provider: str) -> str:
         """Get API key for the specified provider from environment variables."""
-        env_var_map = {
+        env_vars = {
             "groq": "GROQ_API_KEY",
-            "openai": "OPENAI_API_KEY", 
-            "gemini": "GEMINI_API_KEY"
+            "openai": "OPENAI_API_KEY"
         }
         
-        env_var = env_var_map.get(provider.lower())
+        env_var = env_vars.get(provider.lower())
         if not env_var:
             raise ValueError(f"Unknown provider: {provider}")
         
@@ -161,25 +133,46 @@ class OSCARSettings:
         
         return api_key
     
+    # Simple property getters
     @property
     def log_level(self) -> str:
-        """Get logging level from environment."""
         return os.getenv("OSCAR_LOG_LEVEL", "INFO")
     
     @property
     def safe_mode(self) -> bool:
-        """Check if safe mode is enabled."""
         return os.getenv("OSCAR_SAFE_MODE", "true").lower() == "true"
     
     @property
     def debug_mode(self) -> bool:
-        """Check if debug mode is enabled."""
         return os.getenv("OSCAR_DEBUG", "false").lower() == "true"
     
     @property
     def dry_run_mode(self) -> bool:
-        """Check if dry run mode is enabled."""
         return os.getenv("OSCAR_DRY_RUN", "false").lower() == "true"
+
 
 # Global settings instance
 settings = OSCARSettings()
+
+# Centralized safety patterns (used by all components)
+SAFETY_PATTERNS = {
+    "dangerous_commands": [
+        r"rm\s+-rf\s+/",
+        r"del\s+/s\s+/q", 
+        r"format\s+c:",
+        r"dd\s+if=",
+        r":(){ :|:& };:",  # Fork bomb
+        r"sudo\s+rm\s+-rf",
+        r"diskpart",
+        r"fdisk"
+    ],
+    
+    "high_risk_keywords": [
+        "sudo", "administrator", "registry", "system32",
+        "delete", "format", "partition", "boot"
+    ],
+    
+    "medium_risk_keywords": [
+        "install", "uninstall", "modify", "download", "execute"
+    ]
+}

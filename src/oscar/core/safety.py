@@ -1,12 +1,10 @@
 """
-OSCAR Safety Scanner - The Guardian
-Provides safety checks, risk assessment, and human confirmation workflows.
+OSCAR Safety Scanner - Simplified safety analysis and confirmation
 """
 
 import re
 import getpass
-from typing import List, Dict, Any, Tuple
-from enum import Enum
+from typing import Dict, Any, Tuple
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -14,160 +12,89 @@ from rich.prompt import Confirm, Prompt
 from rich.text import Text
 
 from oscar.core.planner import AgentPlan, ActionStep
-from oscar.config.settings import settings
+from oscar.config.settings import settings, SAFETY_PATTERNS
 
 console = Console()
 
 
-class RiskLevel(Enum):
-    """Risk level enumeration with colors."""
-    LOW = ("low", "green")
-    MEDIUM = ("medium", "yellow") 
-    HIGH = ("high", "orange")
-    DANGEROUS = ("dangerous", "red")
-    
-    def __init__(self, level: str, color: str):
-        self.level = level
-        self.color = color
-
-
 class SafetyScanner:
-    """
-    Safety scanner that analyzes plans for dangerous operations
-    and manages human-in-the-loop confirmation workflows.
-    """
+    """Simplified safety scanner with human confirmation workflows."""
     
     def __init__(self):
-        self.safety_config = settings.llm_config.safety
         self.safe_mode = settings.safe_mode
         self.dry_run_mode = settings.dry_run_mode
         
-        # Risk level mapping
-        self.risk_levels = {
-            "low": RiskLevel.LOW,
-            "medium": RiskLevel.MEDIUM,
-            "high": RiskLevel.HIGH,
-            "dangerous": RiskLevel.DANGEROUS
+        # Risk level colors
+        self.risk_colors = {
+            "low": "green",
+            "medium": "yellow", 
+            "high": "orange",
+            "dangerous": "red"
         }
     
     def analyze_plan(self, plan: AgentPlan) -> Dict[str, Any]:
-        """
-        Analyze a complete plan for safety concerns.
-        
-        Args:
-            plan: The agent plan to analyze
-            
-        Returns:
-            Analysis results with recommendations
-        """
+        """Analyze a plan for safety concerns."""
         analysis = {
             "overall_risk": plan.risk_level,
-            "step_analysis": [],
+            "dangerous_steps": [],
             "safety_flags": [],
-            "recommendations": [],
-            "requires_admin": False,
-            "dangerous_steps": []
+            "requires_admin": False
         }
         
         for step in plan.plan:
-            step_analysis = self._analyze_step(step)
-            analysis["step_analysis"].append(step_analysis)
+            step_flags = self._analyze_step(step)
             
-            # Collect safety flags
-            if step_analysis["flags"]:
-                analysis["safety_flags"].extend(step_analysis["flags"])
-            
-            # Track dangerous steps
-            if step_analysis["risk_level"] in ["high", "dangerous"]:
+            if step_flags:
+                analysis["safety_flags"].extend(step_flags)
+                
+            if step.risk_level in ["high", "dangerous"]:
                 analysis["dangerous_steps"].append(step.id)
-            
-            # Check if admin privileges are required
-            if step_analysis["requires_admin"]:
+                
+            if self._requires_admin(step.command):
                 analysis["requires_admin"] = True
-        
-        # Generate recommendations
-        analysis["recommendations"] = self._generate_recommendations(analysis)
         
         return analysis
     
-    def _analyze_step(self, step: ActionStep) -> Dict[str, Any]:
-        """Analyze a single step for safety concerns."""
+    def _analyze_step(self, step: ActionStep) -> list[str]:
+        """Analyze a single step and return safety flags."""
+        flags = []
         command = step.command.lower()
         
-        step_analysis = {
-            "step_id": step.id,
-            "risk_level": step.risk_level,
-            "flags": [],
-            "requires_admin": False,
-            "patterns_matched": []
-        }
-        
         # Check dangerous patterns
-        for pattern in self.safety_config.dangerous_patterns:
+        for pattern in SAFETY_PATTERNS["dangerous_commands"]:
             if re.search(pattern, step.command, re.IGNORECASE):
-                step_analysis["flags"].append(f"Dangerous pattern: {pattern}")
-                step_analysis["patterns_matched"].append(pattern)
+                flags.append(f"Dangerous pattern detected in step {step.id}")
+                break
         
         # Check for admin requirements
-        admin_indicators = ["sudo", "administrator", "runas", "privilege", "admin"]
-        for indicator in admin_indicators:
-            if indicator in command:
-                step_analysis["requires_admin"] = True
-                step_analysis["flags"].append("Requires administrative privileges")
-                break
+        if self._requires_admin(command):
+            flags.append(f"Step {step.id} requires administrative privileges")
         
-        # Check for system file access
-        system_paths = ["/system", "/boot", "c:\\windows", "system32", "/etc", "/usr/bin"]
+        # Check for system paths
+        system_paths = ["/system", "/boot", "c:\\windows", "system32", "/etc"]
         for path in system_paths:
             if path.lower() in command:
-                step_analysis["flags"].append(f"Accesses system directory: {path}")
-        
-        # Check for network operations
-        network_indicators = ["curl", "wget", "download", "upload", "http", "ftp"]
-        for indicator in network_indicators:
-            if indicator in command:
-                step_analysis["flags"].append("Network operation detected")
+                flags.append(f"Step {step.id} accesses system directory")
                 break
         
-        return step_analysis
+        return flags
     
-    def _generate_recommendations(self, analysis: Dict[str, Any]) -> List[str]:
-        """Generate safety recommendations based on analysis."""
-        recommendations = []
-        
-        if analysis["overall_risk"] == "dangerous":
-            recommendations.append("⚠️  DANGER: This plan contains potentially destructive operations")
-            recommendations.append("🛡️  Consider running in dry-run mode first")
-            recommendations.append("💾  Ensure you have recent backups")
-        
-        elif analysis["overall_risk"] == "high":
-            recommendations.append("⚠️  HIGH RISK: This plan modifies system settings")
-            recommendations.append("🔍  Review each step carefully before approval")
-        
-        if analysis["requires_admin"]:
-            recommendations.append("🔑  Administrative privileges required")
-        
-        if len(analysis["dangerous_steps"]) > 0:
-            recommendations.append(f"🚨  {len(analysis['dangerous_steps'])} steps require extra confirmation")
-        
-        if self.dry_run_mode:
-            recommendations.append("🧪  DRY RUN MODE: No actual changes will be made")
-        
-        return recommendations
+    def _requires_admin(self, command: str) -> bool:
+        """Check if command requires admin privileges."""
+        admin_indicators = ["sudo", "administrator", "runas", "admin"]
+        return any(indicator in command.lower() for indicator in admin_indicators)
     
     def display_plan(self, plan: AgentPlan, analysis: Dict[str, Any]) -> None:
-        """Display the plan with safety analysis in a beautiful format."""
+        """Display the plan with safety analysis."""
+        # Plan title with risk level
+        risk_color = self.risk_colors[analysis["overall_risk"]]
+        title_text = Text()
+        title_text.append("📋 Execution Plan", style="bold blue")
+        title_text.append(f" (Risk: {analysis['overall_risk'].upper()})", style=f"bold {risk_color}")
         
-        # Main plan panel
-        plan_title = Text()
-        plan_title.append("📋 Execution Plan", style="bold blue")
+        console.print(Panel(title_text, border_style=risk_color))
         
-        risk_level = self.risk_levels[analysis["overall_risk"]]
-        plan_title.append(f" (Risk: {risk_level.level.upper()})", style=f"bold {risk_level.color}")
-        
-        console.print(Panel(plan_title, border_style=risk_level.color))
-        
-        # LLM thoughts
+        # Agent reasoning
         console.print(f"\n🤔 [bold]Agent Reasoning:[/bold]\n{plan.thoughts}\n")
         
         # Steps table
@@ -178,13 +105,11 @@ class SafetyScanner:
         table.add_column("Risk", width=8)
         table.add_column("Explanation", width=30)
         
-        for i, step in enumerate(plan.plan):
-            step_analysis = analysis["step_analysis"][i]
-            risk_color = self.risk_levels[step_analysis["risk_level"]].color
+        for step in plan.plan:
+            risk_color = self.risk_colors[step.risk_level]
+            risk_display = step.risk_level.upper()
             
-            # Add warning emoji for high-risk steps
-            risk_display = step_analysis["risk_level"].upper()
-            if step_analysis["risk_level"] in ["high", "dangerous"]:
+            if step.risk_level in ["high", "dangerous"]:
                 risk_display = f"⚠️  {risk_display}"
             
             table.add_row(
@@ -203,88 +128,68 @@ class SafetyScanner:
             for flag in analysis["safety_flags"]:
                 console.print(f"  • {flag}")
         
-        # Recommendations
-        if analysis["recommendations"]:
-            console.print("\n💡 [bold yellow]Recommendations:[/bold yellow]")
-            for rec in analysis["recommendations"]:
-                console.print(f"  {rec}")
+        # Simple recommendations
+        if analysis["overall_risk"] == "dangerous":
+            console.print("\n⚠️  [bold red]DANGER: This plan contains potentially destructive operations[/bold red]")
+        elif analysis["overall_risk"] == "high":
+            console.print("\n⚠️  [bold yellow]HIGH RISK: Review each step carefully[/bold yellow]")
+        
+        if analysis["requires_admin"]:
+            console.print("🔑  Administrative privileges required")
+        
+        if self.dry_run_mode:
+            console.print("🧪  [yellow]DRY RUN MODE: No actual changes will be made[/yellow]")
         
         console.print()
     
     def get_user_confirmation(self, plan: AgentPlan, analysis: Dict[str, Any]) -> Tuple[bool, str]:
-        """
-        Get user confirmation for plan execution.
-        
-        Returns:
-            Tuple of (approved, reason)
-        """
-        
+        """Get user confirmation based on risk level."""
         # Display the plan
         self.display_plan(plan, analysis)
         
-        # Different confirmation levels based on risk
+        # Route to appropriate confirmation level
         if analysis["overall_risk"] == "dangerous":
-            return self._get_dangerous_confirmation(plan, analysis)
+            return self._get_dangerous_confirmation(plan)
         elif analysis["overall_risk"] == "high":
             return self._get_high_risk_confirmation(plan, analysis)
         else:
-            return self._get_standard_confirmation(plan, analysis)
+            return self._get_standard_confirmation(plan)
     
-    def _get_standard_confirmation(self, plan: AgentPlan, analysis: Dict[str, Any]) -> Tuple[bool, str]:
-        """Standard confirmation for low/medium risk plans."""
-        
-        # Show what will happen
+    def _get_standard_confirmation(self, plan: AgentPlan) -> Tuple[bool, str]:
+        """Standard confirmation for low/medium risk."""
         if self.dry_run_mode:
-            console.print("[yellow]DRY RUN MODE: Commands will be simulated, not executed[/yellow]")
+            console.print("[yellow]DRY RUN MODE: Commands will be simulated[/yellow]")
         
-        # Simple yes/no confirmation
-        approved = Confirm.ask(
-            f"\n{plan.confirm_prompt}",
-            default=False
-        )
-        
-        reason = "User approved" if approved else "User rejected"
-        return approved, reason
+        approved = Confirm.ask(f"\n{plan.confirm_prompt}", default=False)
+        return approved, "User approved" if approved else "User rejected"
     
     def _get_high_risk_confirmation(self, plan: AgentPlan, analysis: Dict[str, Any]) -> Tuple[bool, str]:
         """Enhanced confirmation for high-risk plans."""
-        
-        console.print("\n[bold yellow]⚠️  HIGH RISK OPERATION DETECTED[/bold yellow]")
-        console.print("This plan will make significant system changes.")
+        console.print("\n[bold yellow]⚠️  HIGH RISK OPERATION[/bold yellow]")
         
         if not self.dry_run_mode:
-            console.print("[red]⚠️  This will make REAL changes to your system![/red]")
+            console.print("[red]This will make REAL changes to your system![/red]")
         
-        # Step-by-step confirmation for dangerous steps
+        # Confirm dangerous steps individually
         for step_id in analysis["dangerous_steps"]:
             step = next(s for s in plan.plan if s.id == step_id)
-            step_approved = Confirm.ask(
-                f"\nApprove step {step_id}: {step.command}?",
-                default=False
-            )
+            step_approved = Confirm.ask(f"\nApprove step {step_id}: {step.command}?", default=False)
             if not step_approved:
                 return False, f"User rejected step {step_id}"
         
         # Final confirmation
-        final_approval = Confirm.ask(
-            f"\n[bold]{plan.confirm_prompt}[/bold]",
-            default=False
-        )
-        
-        reason = "User approved high-risk plan" if final_approval else "User rejected final confirmation"
-        return final_approval, reason
+        final_approved = Confirm.ask(f"\n[bold]{plan.confirm_prompt}[/bold]", default=False)
+        return final_approved, "User approved high-risk plan" if final_approved else "User rejected"
     
-    def _get_dangerous_confirmation(self, plan: AgentPlan, analysis: Dict[str, Any]) -> Tuple[bool, str]:
-        """Maximum security confirmation for dangerous plans."""
-        
+    def _get_dangerous_confirmation(self, plan: AgentPlan) -> Tuple[bool, str]:
+        """Maximum security confirmation for dangerous operations."""
         console.print("\n[bold red]🚨 DANGEROUS OPERATION DETECTED 🚨[/bold red]")
         console.print("[red]This plan contains potentially destructive commands![/red]")
         
         if not self.dry_run_mode:
             console.print("\n[bold red]⚠️  WARNING: This will make IRREVERSIBLE changes![/bold red]")
-            console.print("[yellow]Consider enabling dry-run mode first: oscar --dry-run[/yellow]")
         
-        # Require typing "CONFIRM" for dangerous operations
+        # Require typing "CONFIRM"
         confirmation_word = Prompt.ask(
             "\n[bold]Type 'CONFIRM' to proceed with dangerous operation",
             default=""
@@ -293,9 +198,9 @@ class SafetyScanner:
         if confirmation_word != "CONFIRM":
             return False, "User failed to type CONFIRM"
         
-        # Additional admin password check in safe mode
+        # Additional password check in safe mode
         if self.safe_mode and not self.dry_run_mode:
-            console.print("\n[yellow]Safe mode requires password verification for dangerous operations[/yellow]")
+            console.print("\n[yellow]Safe mode requires password verification[/yellow]")
             try:
                 password = getpass.getpass("Enter your system password: ")
                 if not password:
@@ -303,48 +208,30 @@ class SafetyScanner:
             except KeyboardInterrupt:
                 return False, "Password entry cancelled"
         
-        # Final confirmation with explicit acknowledgment
-        final_confirmation = Confirm.ask(
+        # Final confirmation
+        final_confirmed = Confirm.ask(
             "\n[bold red]I understand this is dangerous and irreversible. Proceed?[/bold red]",
             default=False
         )
         
-        reason = "User confirmed dangerous operation" if final_confirmation else "User rejected dangerous operation"
-        return final_confirmation, reason
+        return final_confirmed, "User confirmed dangerous operation" if final_confirmed else "User rejected"
     
-    def create_safety_report(self, plan: AgentPlan, analysis: Dict[str, Any], approved: bool, reason: str) -> Dict[str, Any]:
-        """Create a comprehensive safety report for audit logs."""
-        
+    def create_safety_report(self, plan: AgentPlan, analysis: Dict[str, Any], 
+                           approved: bool, reason: str) -> Dict[str, Any]:
+        """Create a simple safety report for audit logs."""
         return {
-            "timestamp": self._get_timestamp(),
-            "plan_id": hash(str(plan.plan)),  # Simple plan identifier
             "overall_risk": analysis["overall_risk"],
             "total_steps": len(plan.plan),
             "dangerous_steps": len(analysis["dangerous_steps"]),
-            "safety_flags": len(analysis["safety_flags"]),
-            "requires_admin": analysis["requires_admin"],
             "approved": approved,
             "approval_reason": reason,
             "dry_run_mode": self.dry_run_mode,
-            "safe_mode": self.safe_mode,
-            "flags": analysis["safety_flags"],
-            "recommendations": analysis["recommendations"]
+            "safety_flags": analysis["safety_flags"]
         }
-    
-    def _get_timestamp(self) -> str:
-        """Get current timestamp in ISO format."""
-        from datetime import datetime
-        return datetime.now().isoformat()
 
 
-# Convenience functions for easy import
 def analyze_and_confirm_plan(plan: AgentPlan) -> Tuple[bool, Dict[str, Any]]:
-    """
-    Convenience function to analyze a plan and get user confirmation.
-    
-    Returns:
-        Tuple of (approved, safety_report)
-    """
+    """Convenience function to analyze and confirm a plan."""
     scanner = SafetyScanner()
     analysis = scanner.analyze_plan(plan)
     approved, reason = scanner.get_user_confirmation(plan, analysis)

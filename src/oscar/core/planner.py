@@ -1,17 +1,17 @@
 """
-OSCAR LLM Planner - The Brain of OSCAR
-Handles communication with LLM providers to generate structured action plans.
+OSCAR LLM Planner - Streamlined planning engine
+Converts natural language requests into structured action plans.
 """
 
 import json
 import re
 import platform
-from typing import Dict, List, Any, Optional
+from typing import List, Dict, Any
 from pathlib import Path
 from groq import Groq
 from pydantic import BaseModel, ValidationError
 
-from oscar.config.settings import settings
+from oscar.config.settings import settings, SAFETY_PATTERNS
 
 
 class ActionStep(BaseModel):
@@ -32,94 +32,73 @@ class AgentPlan(BaseModel):
 
 
 class LLMPlanner:
-    """
-    Main LLM planning engine that converts natural language requests 
-    into structured, executable action plans.
-    """
+    """Streamlined LLM planning engine."""
     
     def __init__(self):
         self.config = settings.get_active_llm_config()
         self.provider = settings.llm_config.active_provider
-        self.prompts = settings.llm_config.prompts
-        self.safety_config = settings.llm_config.safety
         
         # Initialize LLM client
-        self._init_client()
+        self.client = self._init_client()
         
-        # System context
-        self.system_context = self._build_system_context()
+        # System context (only what we actually use)
+        self.system_context = {
+            "os_type": platform.system(),
+            "cwd": str(Path.cwd()),
+            "available_tools": ["shell", "browser", "file_ops"]
+        }
     
     def _init_client(self):
-        """Initialize the appropriate LLM client."""
+        """Initialize the LLM client."""
         try:
             api_key = settings.get_api_key(self.provider)
             
             if self.provider == "groq":
-                self.client = Groq(api_key=api_key)
+                return Groq(api_key=api_key)
             elif self.provider == "openai":
                 from openai import OpenAI
-                self.client = OpenAI(api_key=api_key)
-            elif self.provider == "gemini":
-                # Future implementation for Gemini
-                raise NotImplementedError("Gemini support coming soon")
+                return OpenAI(api_key=api_key)
             else:
                 raise ValueError(f"Unsupported LLM provider: {self.provider}")
                 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM client: {e}")
     
-    def _build_system_context(self) -> Dict[str, Any]:
-        """Build system context information for the LLM."""
-        return {
-            "os_type": platform.system(),
-            "os_version": platform.version(),
-            "python_version": platform.python_version(),
-            "cwd": str(Path.cwd()),
-            "user_home": str(Path.home()),
-            "available_tools": ["shell", "browser", "file_ops", "email"],
-            "safety_mode": settings.safe_mode,
-            "dry_run": settings.dry_run_mode
-        }
-    
     def create_plan(self, user_input: str, context: str = "") -> AgentPlan:
-        """
-        Create a structured plan from natural language input.
+        """Create a structured plan from natural language input."""
         
-        Args:
-            user_input: The user's natural language request
-            context: Additional context from previous actions
-            
-        Returns:
-            AgentPlan: Structured plan with actions and risk assessment
-        """
-        
-        # Build the prompt
+        # Build prompts
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_user_prompt(user_input, context)
         
-        # Generate plan using LLM
+        # Call LLM
         raw_response = self._call_llm(system_prompt, user_prompt)
         
-        # Parse and validate the response
+        # Parse and validate response
         plan = self._parse_llm_response(raw_response)
         
-        # Additional safety analysis
-        plan = self._analyze_plan_safety(plan)
+        # Assess overall risk
+        plan.risk_level = self._assess_overall_risk(plan)
         
         return plan
     
     def _build_system_prompt(self) -> str:
-        """Build the system prompt with current context."""
-        base_prompt = self.prompts.system_prompt
+        """Build the system prompt with context."""
+        base_prompt = settings.llm_config.system_prompt
+        
+        # Format with current context
+        formatted_prompt = base_prompt.format(
+            os_type=self.system_context["os_type"],
+            cwd=self.system_context["cwd"]
+        )
         
         context_info = f"""
 Current System Context:
-- Operating System: {self.system_context['os_type']} {self.system_context['os_version']}
+- Operating System: {self.system_context['os_type']}
 - Current Directory: {self.system_context['cwd']}
-- Home Directory: {self.system_context['user_home']}
 - Available Tools: {', '.join(self.system_context['available_tools'])}
-- Safety Mode: {'ON' if self.system_context['safety_mode'] else 'OFF'}
-- Dry Run Mode: {'ON' if self.system_context['dry_run'] else 'OFF'}
+- Safety Mode: {'ON' if settings.safe_mode else 'OFF'}
+- Dry Run Mode: {'ON' if settings.dry_run_mode else 'OFF'}
 
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {{
@@ -127,40 +106,28 @@ CRITICAL: You must respond with ONLY valid JSON in this exact format:
     "plan": [
         {{
             "id": 1,
-            "tool": "shell|browser|file_ops|email",
-            "command": "exact command or action to execute",
-            "explanation": "clear explanation of what this step does",
+            "tool": "shell|browser|file_ops",
+            "command": "exact command to execute",
+            "explanation": "what this step does",
             "risk_level": "low|medium|high|dangerous"
         }}
     ],
     "risk_level": "low|medium|high|dangerous",
     "confirm_prompt": "Clear question asking user to approve the plan"
 }}
-
-Rules:
-1. Break complex tasks into simple, sequential steps
-2. Use appropriate tools for each action
-3. Be conservative with risk assessment
-4. Provide clear explanations for each step
-5. Always ask for confirmation before proceeding
-6. Consider the current operating system for commands
 """
         
-        return base_prompt + context_info
+        return formatted_prompt + context_info
     
     def _build_user_prompt(self, user_input: str, context: str) -> str:
-        """Build the user prompt with request and context."""
-        prompt_template = self.prompts.planning_template
-        
-        return prompt_template.format(
+        """Build the user prompt."""
+        return settings.llm_config.planning_template.format(
             user_input=user_input,
-            context=context if context else "No previous context",
-            os_type=self.system_context['os_type'],
-            cwd=self.system_context['cwd']
+            context=context if context else "No previous context"
         )
     
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
-        """Call the LLM API and return the response."""
+        """Call the LLM API."""
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -175,43 +142,35 @@ Rules:
                     temperature=self.config.temperature,
                     reasoning_effort="medium"  # For GPT-OSS reasoning
                 )
-                return response.choices[0].message.content
-            
-            elif self.provider == "openai":
+            else:  # OpenAI
                 response = self.client.chat.completions.create(
                     model=self.config.model,
                     messages=messages,
                     max_tokens=self.config.max_tokens,
                     temperature=self.config.temperature
                 )
-                return response.choices[0].message.content
             
-            else:
-                raise ValueError(f"Unsupported provider: {self.provider}")
-                
+            return response.choices[0].message.content
+            
         except Exception as e:
             raise RuntimeError(f"LLM API call failed: {e}")
     
     def _parse_llm_response(self, raw_response: str) -> AgentPlan:
-        """Parse and validate the LLM response into a structured plan."""
+        """Parse and validate the LLM response."""
         try:
-            # Clean the response (remove markdown formatting if present)
+            # Clean the response
             cleaned_response = self._clean_json_response(raw_response)
             
             # Parse JSON
             response_data = json.loads(cleaned_response)
             
-            # Validate using Pydantic
-            plan = AgentPlan(**response_data)
-            
-            return plan
+            # Validate with Pydantic
+            return AgentPlan(**response_data)
             
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON response from LLM: {e}")
         except ValidationError as e:
             raise ValueError(f"Invalid plan structure: {e}")
-        except Exception as e:
-            raise RuntimeError(f"Failed to parse LLM response: {e}")
     
     def _clean_json_response(self, response: str) -> str:
         """Clean LLM response to extract valid JSON."""
@@ -219,78 +178,56 @@ Rules:
         response = re.sub(r'```json\s*', '', response)
         response = re.sub(r'```\s*', '', response)
         
-        # Remove any text before the first {
+        # Extract JSON object
         start_idx = response.find('{')
-        if start_idx != -1:
-            response = response[start_idx:]
-        
-        # Remove any text after the last }
         end_idx = response.rfind('}')
-        if end_idx != -1:
-            response = response[:end_idx + 1]
+        
+        if start_idx != -1 and end_idx != -1:
+            response = response[start_idx:end_idx + 1]
         
         return response.strip()
     
-    def _analyze_plan_safety(self, plan: AgentPlan) -> AgentPlan:
-        """Analyze the plan for safety concerns and update risk levels."""
-        overall_risk = "low"
+    def _assess_overall_risk(self, plan: AgentPlan) -> str:
+        """Assess overall risk level for the plan."""
+        risk_levels = ["low", "medium", "high", "dangerous"]
+        max_risk = "low"
         
         for step in plan.plan:
-            # Check for dangerous patterns
-            step_risk = self._assess_step_risk(step.command)
-            step.risk_level = step_risk
+            # Update step risk based on command analysis
+            step.risk_level = self._assess_step_risk(step.command)
             
-            # Update overall risk
-            if step_risk == "dangerous":
-                overall_risk = "dangerous"
-            elif step_risk == "high" and overall_risk != "dangerous":
-                overall_risk = "high"
-            elif step_risk == "medium" and overall_risk not in ["dangerous", "high"]:
-                overall_risk = "medium"
+            # Track highest risk level
+            if risk_levels.index(step.risk_level) > risk_levels.index(max_risk):
+                max_risk = step.risk_level
         
-        plan.risk_level = overall_risk
-        return plan
+        return max_risk
     
     def _assess_step_risk(self, command: str) -> str:
         """Assess the risk level of a single command."""
         command_lower = command.lower()
         
         # Check for dangerous patterns
-        for pattern in self.safety_config.dangerous_patterns:
+        for pattern in SAFETY_PATTERNS["dangerous_commands"]:
             if re.search(pattern, command, re.IGNORECASE):
                 return "dangerous"
         
-        # Check for confirmation-required keywords
-        for keyword in self.safety_config.confirmation_required:
+        # Check for high-risk keywords
+        for keyword in SAFETY_PATTERNS["high_risk_keywords"]:
             if keyword.lower() in command_lower:
                 return "high"
         
-        # Additional risk assessment logic
-        high_risk_indicators = [
-            "format", "partition", "registry", "system32", 
-            "boot", "kernel", "driver", "service"
-        ]
-        
-        medium_risk_indicators = [
-            "install", "uninstall", "modify", "change",
-            "download", "execute", "run"
-        ]
-        
-        for indicator in high_risk_indicators:
-            if indicator in command_lower:
-                return "high"
-        
-        for indicator in medium_risk_indicators:
-            if indicator in command_lower:
+        # Check for medium-risk keywords
+        for keyword in SAFETY_PATTERNS["medium_risk_keywords"]:
+            if keyword.lower() in command_lower:
                 return "medium"
         
         return "low"
     
     def test_connection(self) -> Dict[str, Any]:
-        """Test the LLM connection and return status."""
+        """Test the LLM connection."""
         try:
             test_response = self._call_llm(
-                "You are a test assistant. Respond with only: {'status': 'ok', 'message': 'connection successful'}",
+                "You are a test assistant. Respond with: {'status': 'ok', 'message': 'connection successful'}",
                 "Test connection"
             )
             
