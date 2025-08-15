@@ -88,11 +88,9 @@ class SafetyScanner:
         """Display the plan with safety analysis."""
         # Plan title with risk level
         risk_color = self.risk_colors[analysis["overall_risk"]]
-        title_text = Text()
-        title_text.append("📋 Execution Plan", style="bold blue")
-        title_text.append(f" (Risk: {analysis['overall_risk'].upper()})", style=f"bold {risk_color}")
-        
-        console.print(Panel(title_text, border_style=risk_color))
+
+        console.print()
+        console.rule()
         
         # Agent reasoning
         console.print(f"\n🤔 [bold]Agent Reasoning:[/bold]\n{plan.thoughts}\n")
@@ -121,7 +119,8 @@ class SafetyScanner:
             )
         
         console.print(table)
-        
+        console.print()
+        console.rule()
         # Safety flags
         if analysis["safety_flags"]:
             console.print("\n🚨 [bold red]Safety Flags:[/bold red]")
@@ -130,9 +129,9 @@ class SafetyScanner:
         
         # Simple recommendations
         if analysis["overall_risk"] == "dangerous":
-            console.print("\n⚠️  [bold red]DANGER: This plan contains potentially destructive operations[/bold red]")
+            console.print("\n ⚠️  [bold red]DANGER: This plan contains potentially destructive operations[/bold red]")
         elif analysis["overall_risk"] == "high":
-            console.print("\n⚠️  [bold yellow]HIGH RISK: Review each step carefully[/bold yellow]")
+            console.print("\n ⚠️  [bold yellow]HIGH RISK: Review each step carefully[/bold yellow]")
         
         if analysis["requires_admin"]:
             console.print("🔑  Administrative privileges required")

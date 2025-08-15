@@ -33,38 +33,38 @@ def display_welcome():
     active_config = settings.get_active_llm_config()
     
     config_info = f"""
-[bold]Configuration:[/bold]
-• LLM Provider: [green]{active_provider}[/green]
-• Model: [cyan]{active_config.model}[/cyan]
-• Safe Mode: [{'green' if settings.safe_mode else 'red'}]{settings.safe_mode}[/]
-• Debug Mode: [{'yellow' if settings.debug_mode else 'dim'}]{settings.debug_mode}[/]
-"""
+        [bold]Configuration:[/bold]
+        • LLM Provider: [green]{active_provider}[/green]
+        • Model: [cyan]{active_config.model}[/cyan]
+        • Safe Mode: [{'green' if settings.safe_mode else 'red'}]{settings.safe_mode}[/]
+        • Debug Mode: [{'yellow' if settings.debug_mode else 'dim'}]{settings.debug_mode}[/]
+        """
     console.print(config_info)
 
 
 def display_help():
     """Display available commands."""
     help_text = """
-[bold]Available Commands:[/bold]
-• [cyan]help[/cyan] or [cyan]?[/cyan] - Show this help
-• [cyan]config[/cyan] - Show configuration details
-• [cyan]test[/cyan] - Test LLM connection
-• [cyan]test-agent[/cyan] - Test all components
-• [cyan]quit[/cyan] or [cyan]exit[/cyan] - Exit OSCAR
+        [bold]Available Commands:[/bold]
+        • [cyan]help[/cyan] or [cyan]?[/cyan] - Show this help
+        • [cyan]config[/cyan] - Show configuration details
+        • [cyan]test[/cyan] - Test LLM connection
+        • [cyan]test-agent[/cyan] - Test all components
+        • [cyan]quit[/cyan] or [cyan]exit[/cyan] - Exit OSCAR
 
-[bold]Natural Language Usage:[/bold]
-Just type your request in plain English:
-• "Create a new Python project"
-• "Download the latest Python installer"
-• "List files in current directory"
-• "Search for machine learning tutorials"
+        [bold]Natural Language Usage:[/bold]
+        Just type your request in plain English:
+        • "Create a new Python project"
+        • "Download the latest Python installer"
+        • "List files in current directory"
+        • "Search for machine learning tutorials"
 
-[bold]Safety Features:[/bold]
-• All actions require confirmation
-• Dangerous commands need extra approval
-• Complete audit logging
-• Dry-run mode available (use --dry-run)
-"""
+        [bold]Safety Features:[/bold]
+        • All actions require confirmation
+        • Dangerous commands need extra approval
+        • Complete audit logging
+        • Dry-run mode available (use --dry-run)
+        """
     console.print(help_text)
 
 
@@ -72,6 +72,7 @@ Just type your request in plain English:
 @click.option('--debug', is_flag=True, help='Enable debug mode')
 @click.option('--dry-run', is_flag=True, help='Enable dry-run mode')
 @click.option('--config-check', is_flag=True, help='Check configuration and exit')
+
 def main(debug, dry_run, config_check):
     """OSCAR - Operating System's Complete Agentic Rex"""
     
@@ -149,23 +150,23 @@ def show_config():
     active_config = settings.get_active_llm_config()
     
     config_details = f"""
-[bold]OSCAR Configuration:[/bold]
+        [bold]OSCAR Configuration:[/bold]
 
-[bold]LLM Settings:[/bold]
-• Provider: [green]{active_provider}[/green]
-• Model: [cyan]{active_config.model}[/cyan]
-• Max Tokens: [yellow]{active_config.max_tokens}[/yellow]
-• Temperature: [yellow]{active_config.temperature}[/yellow]
+        [bold]LLM Settings:[/bold]
+        • Provider: [green]{active_provider}[/green]
+        • Model: [cyan]{active_config.model}[/cyan]
+        • Max Tokens: [yellow]{active_config.max_tokens}[/yellow]
+        • Temperature: [yellow]{active_config.temperature}[/yellow]
 
-[bold]System Settings:[/bold]
-• Safe Mode: [{'green' if settings.safe_mode else 'red'}]{settings.safe_mode}[/]
-• Debug Mode: [{'yellow' if settings.debug_mode else 'dim'}]{settings.debug_mode}[/]
-• Dry Run: [{'yellow' if settings.dry_run_mode else 'dim'}]{settings.dry_run_mode}[/]
+        [bold]System Settings:[/bold]
+        • Safe Mode: [{'green' if settings.safe_mode else 'red'}]{settings.safe_mode}[/]
+        • Debug Mode: [{'yellow' if settings.debug_mode else 'dim'}]{settings.debug_mode}[/]
+        • Dry Run: [{'yellow' if settings.dry_run_mode else 'dim'}]{settings.dry_run_mode}[/]
 
-[bold]Directories:[/bold]
-• Data: [dim]{settings.data_dir}[/dim]
-• Config: [dim]{settings.config_dir}[/dim]
-"""
+        [bold]Directories:[/bold]
+        • Data: [dim]{settings.data_dir}[/dim]
+        • Config: [dim]{settings.config_dir}[/dim]
+        """
     console.print(config_details)
 
 
