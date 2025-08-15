@@ -93,29 +93,29 @@ class LLMPlanner:
         )
         
         context_info = f"""
-Current System Context:
-- Operating System: {self.system_context['os_type']}
-- Current Directory: {self.system_context['cwd']}
-- Available Tools: {', '.join(self.system_context['available_tools'])}
-- Safety Mode: {'ON' if settings.safe_mode else 'OFF'}
-- Dry Run Mode: {'ON' if settings.dry_run_mode else 'OFF'}
+            Current System Context:
+            - Operating System: {self.system_context['os_type']}
+            - Current Directory: {self.system_context['cwd']}
+            - Available Tools: {', '.join(self.system_context['available_tools'])}
+            - Safety Mode: {'ON' if settings.safe_mode else 'OFF'}
+            - Dry Run Mode: {'ON' if settings.dry_run_mode else 'OFF'}
 
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{{
-    "thoughts": "Your reasoning about the user's request",
-    "plan": [
-        {{
-            "id": 1,
-            "tool": "shell|browser|file_ops",
-            "command": "exact command to execute",
-            "explanation": "what this step does",
-            "risk_level": "low|medium|high|dangerous"
-        }}
-    ],
-    "risk_level": "low|medium|high|dangerous",
-    "confirm_prompt": "Clear question asking user to approve the plan"
-}}
-"""
+            CRITICAL: You must respond with ONLY valid JSON in this exact format:
+            {{
+                "thoughts": "Your reasoning about the user's request",
+                "plan": [
+                    {{
+                        "id": 1,
+                        "tool": "shell|browser|file_ops",
+                        "command": "exact command to execute directly in terminal with NO errors",
+                        "explanation": "what this step does",
+                        "risk_level": "low|medium|high|dangerous"
+                    }}
+                ],
+                "risk_level": "low|medium|high|dangerous",
+                "confirm_prompt": "Clear question asking user to approve the plan"
+            }}
+            """
         
         return formatted_prompt + context_info
     
@@ -134,14 +134,24 @@ CRITICAL: You must respond with ONLY valid JSON in this exact format:
         ]
         
         try:
-            if self.provider == "groq":
-                response = self.client.chat.completions.create(
-                    model=self.config.model,
-                    messages=messages,
-                    max_tokens=self.config.max_tokens,
-                    temperature=self.config.temperature,
-                    reasoning_effort="medium"  # For GPT-OSS reasoning
-                )
+            if self.provider== "groq":
+                if settings.llm_config.providers.get("groq").model == "openai/gpt-oss-120b":
+                    # For GPT-OSS reasoning
+                    response = self.client.chat.completions.create(
+                        model=self.config.model,
+                        messages=messages,
+                        max_tokens=self.config.max_tokens,
+                        temperature=self.config.temperature,
+                        reasoning_effort="medium" 
+                    )
+
+                else:  # For other Groq models
+                    response = self.client.chat.completions.create(
+                        model=self.config.model,
+                        messages=messages,
+                        max_tokens=self.config.max_tokens,
+                        temperature=self.config.temperature
+                    )
             else:  # OpenAI
                 response = self.client.chat.completions.create(
                     model=self.config.model,

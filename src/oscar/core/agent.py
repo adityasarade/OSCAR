@@ -78,7 +78,7 @@ class OSCARAgent:
             console.print("[green]✓[/green] Plan generated successfully")
             
             # Stage 2: Safety Analysis & Confirmation
-            console.print("\n🛡️  [bold yellow]Safety Analysis...[/bold yellow]")
+            # console.print("\n🛡️  [bold yellow]Safety Analysis...[/bold yellow]")
             result["stage"] = "safety"
             
             approved, safety_report = analyze_and_confirm_plan(plan)
@@ -93,7 +93,7 @@ class OSCARAgent:
             console.print("[green]✓[/green] Plan approved by user")
             
             # Stage 3: Execution
-            console.print("\n⚙️  [bold green]Execution...[/bold green]")
+            console.print("\n⚙️  [bold green]Executing...[/bold green]")
             result["stage"] = "execution"
             
             execution_result = self._execute_plan(plan)

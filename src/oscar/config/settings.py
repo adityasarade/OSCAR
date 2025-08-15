@@ -85,24 +85,24 @@ class OSCARSettings:
             },
             "system_prompt": """You are OSCAR, an intelligent system automation assistant. You help users accomplish tasks by creating structured, safe plans.
 
-Rules:
-1. Always respond with valid JSON containing: thoughts, plan, risk_level, confirm_prompt
-2. Break complex tasks into clear, sequential steps
-3. Each step should have: id, tool, command/action, explanation
-4. Risk levels: low, medium, high, dangerous
-5. Be conservative with risk assessment
-6. Include clear explanations for each step
+            Rules:
+            1. Always respond with valid JSON containing: thoughts, plan, risk_level, confirm_prompt
+            2. Break complex tasks into clear, sequential steps
+            3. Each step should have: id, tool, command/action, explanation
+            4. Risk levels: low, medium, high, dangerous
+            5. Be conservative with risk assessment
+            6. Include clear explanations for each step
 
-Available tools: shell, browser, file_ops
+            Available tools: shell, browser, file_ops
 
-Current OS: {os_type}
-Current working directory: {cwd}""",
-            
-            "planning_template": """User request: {user_input}
+            Current OS: {os_type}
+            Current working directory: {cwd}""",
+                        
+                        "planning_template": """User request: {user_input}
 
-Context from previous actions: {context}
+            Context from previous actions: {context}
 
-Create a structured plan to accomplish this request safely. Consider the user's operating system and current context."""
+            Create a structured plan to accomplish this request safely. Consider the user's operating system and current context."""
         }
         
         with open(config_path, 'w', encoding='utf-8') as f:
@@ -157,22 +157,19 @@ settings = OSCARSettings()
 # Centralized safety patterns (used by all components)
 SAFETY_PATTERNS = {
     "dangerous_commands": [
-        r"rm\s+-rf\s+/",
-        r"del\s+/s\s+/q", 
-        r"format\s+c:",
-        r"dd\s+if=",
-        r":(){ :|:& };:",  # Fork bomb
-        r"sudo\s+rm\s+-rf",
-        r"diskpart",
-        r"fdisk"
+        r"\brm\s+-rf\s+/.*",               # Remove root dir
+        r"\bdel\s+/s\s+/q\b",              # Windows delete
+        r"\bformat\s+c:\b",                # Format drive
+        r"\bdd\s+if=.*",                   # Disk overwrite
+        r":\(\)\s*\{\s*:\|\s*:\s*;\s*\}\s*;",  # Fork bomb
+        r"\bsudo\s+rm\s+-rf\s+/.*",        # Sudo rm -rf /
+        r"\bdiskpart\b",                   # Diskpart tool
+        r"\bfdisk\b"                       # fdisk tool
     ],
-    
     "high_risk_keywords": [
-        "sudo", "administrator", "registry", "system32",
-        "delete", "format", "partition", "boot"
+        "shutdown", "reboot", "mkfs", "chmod 777", "chown root"
     ],
-    
     "medium_risk_keywords": [
-        "install", "uninstall", "modify", "download", "execute"
+        "kill", "service stop", "systemctl stop", "rmdir", "mv /"
     ]
 }
