@@ -55,58 +55,10 @@ class OSCARSettings:
         """Load LLM configuration from YAML file."""
         config_path = self.config_dir / "llm_config.yaml"
         
-        if not config_path.exists():
-            self._create_default_config(config_path)
-        
         with open(config_path, 'r', encoding='utf-8') as f:
             config_data = yaml.safe_load(f)
         
         return LLMConfig(**config_data)
-    
-    def _create_default_config(self, config_path: Path):
-        """Create a default configuration file."""
-        default_config = {
-            "active_provider": "groq",
-            "providers": {
-                "groq": {
-                    "base_url": "https://api.groq.com/openai/v1",
-                    "model": "openai/gpt-oss-120b",
-                    "max_tokens": 2048,
-                    "temperature": 0.1,
-                    "timeout": 30
-                },
-                "openai": {
-                    "base_url": "https://api.openai.com/v1", 
-                    "model": "gpt-4o-mini",
-                    "max_tokens": 2048,
-                    "temperature": 0.1,
-                    "timeout": 30
-                }
-            },
-            "system_prompt": """You are OSCAR, an intelligent system automation assistant. You help users accomplish tasks by creating structured, safe plans.
-
-            Rules:
-            1. Always respond with valid JSON containing: thoughts, plan, risk_level, confirm_prompt
-            2. Break complex tasks into clear, sequential steps
-            3. Each step should have: id, tool, command/action, explanation
-            4. Risk levels: low, medium, high, dangerous
-            5. Be conservative with risk assessment
-            6. Include clear explanations for each step
-
-            Available tools: shell, browser, file_ops
-
-            Current OS: {os_type}
-            Current working directory: {cwd}""",
-                        
-                        "planning_template": """User request: {user_input}
-
-            Context from previous actions: {context}
-
-            Create a structured plan to accomplish this request safely. Consider the user's operating system and current context."""
-        }
-        
-        with open(config_path, 'w', encoding='utf-8') as f:
-            yaml.dump(default_config, f, default_flow_style=False, indent=2)
     
     def get_active_llm_config(self) -> LLMProviderConfig:
         """Get configuration for the currently active LLM provider."""
