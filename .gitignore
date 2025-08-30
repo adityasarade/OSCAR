@@ -1,0 +1,16 @@
+# Ignore Python cache and venv
+.venv/
+__pycache__/
+*.pyc
+
+# Ignore OS-specific junk
+.DS_Store
+
+.env
+downloads/
+Research papers/
+description.txt
+project_structure.txt
+
+data/logs/
+oscar_agent.egg-info/

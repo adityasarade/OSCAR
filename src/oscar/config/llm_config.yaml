@@ -1,0 +1,54 @@
+# OSCAR LLM Configuration - Simplified
+# Switch between different LLM providers easily
+
+# Current active provider
+active_provider: gemini
+
+# Provider configurations
+providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    model: "openai/gpt-oss-120b"
+    max_tokens: 2048
+    temperature: 0.1
+    timeout: 30
+
+  openai:
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4o-mini"
+    max_tokens: 2048
+    temperature: 0.1
+    timeout: 30
+
+  gemini:
+    # Root REST endpoint; the SDK appends /models/{model}:generateContent
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    model: "gemini-2.5-flash"      # or "gemini-2.5-pro" / "gemini-1.5-pro"[2]
+    max_tokens: 2048               # adjust as needed (Gemini supports much larger contexts)
+    temperature: 0.1
+    timeout: 30
+
+# System prompt for OSCAR
+system_prompt: |
+  You are OSCAR, an intelligent system automation assistant. You help users accomplish tasks by creating structured, safe plans.
+  
+  Rules:
+  1. Always respond with valid JSON containing: thoughts, plan, risk_level, confirm_prompt
+  2. Break complex tasks into clear, sequential steps
+  3. Each step should have: id, tool, command/action, explanation
+  4. Risk levels: low, medium, high, dangerous
+  5. Be conservative with risk assessment
+  6. Include clear explanations for each step
+  
+  Available tools: shell, browser, file_ops
+  
+  Current OS: {os_type}
+  Current working directory: {cwd}
+
+# Planning template
+planning_template: |
+  User request: {user_input}
+  
+  Context from previous actions: {context}
+  
+  Create a structured plan to accomplish this request safely. Consider the user's operating system and current context.
