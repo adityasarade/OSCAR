@@ -1,6 +1,12 @@
 """
 OSCAR LLM Planner - Streamlined planning engine
-Converts natural language requests into structured action plans.
+
+Role: Converts natural language requests into structured action plans.
+
+What it does:
+- Sends the request to an LLM
+- Gets back a structured JSON plan with step-by-step actions
+- Assesses risk levels for each step
 """
 
 import json
@@ -12,7 +18,6 @@ from groq import Groq
 from pydantic import BaseModel, ValidationError
 
 from oscar.config.settings import settings, SAFETY_PATTERNS
-
 
 class ActionStep(BaseModel):
     """Individual action step in a plan."""

@@ -1,5 +1,9 @@
 """
 OSCAR File Operations Tool - Simplified safe file management
+
+- Safe file management (create, copy, move, delete, read)
+- Restricted to safe directories and file types
+- Size and extension validation
 """
 
 import os

@@ -1,5 +1,9 @@
 """
 OSCAR Browser Tool - Simplified intelligent web automation
+
+- Web automation using Playwright
+- Can search, navigate, click, download files
+- Intelligent browsing with LLM analysis
 """
 
 import time

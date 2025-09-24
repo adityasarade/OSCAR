@@ -1,0 +1,135 @@
+flowchart TD
+    %% Input Layer
+    A[🎤 User Input] --> B{Input Type?}
+    B -->|Voice| C[🔊 Speech-to-Text<br/>Vosk/Whisper]
+    B -->|Text| D[📝 Text Input]
+    C --> E[📋 Natural Language Processing]
+    D --> E
+    
+    %% Context Gathering
+    E --> F[🧠 Context Gathering Agent]
+    F --> G[📊 Session History<br/>Retrieval]
+    F --> H[🔍 Vector Store Search<br/>RAG Memory]
+    F --> I[⚙️ System State<br/>Detection]
+    
+    %% Context Integration
+    G --> J[🔗 Context Integration<br/>& Enrichment]
+    H --> J
+    I --> J
+    
+    %% Multi-Agent Planning System
+    J --> K[🤖 Master Planning Agent]
+    K --> L{Task Complexity?}
+    
+    %% Simple vs Complex Task Routing
+    L -->|Simple| M[⚡ Direct Execution<br/>Planning Agent]
+    L -->|Complex| N[🧩 Multi-Agent<br/>Orchestrator]
+    
+    %% Multi-Agent System for Complex Tasks
+    N --> O[🎯 Task Decomposition<br/>Agent]
+    O --> P[📋 Sub-task Creation]
+    
+    P --> Q{Sub-task Type?}
+    Q -->|System Command| R[💻 System Command<br/>Specialist Agent]
+    Q -->|Web Automation| S[🌐 Web Automation<br/>Specialist Agent]
+    Q -->|File Operations| T[📁 File Management<br/>Specialist Agent]
+    Q -->|Information Gathering| U[🔎 Research<br/>Specialist Agent]
+    
+    %% Agent Collaboration
+    R --> V[🤝 Agent Collaboration<br/>& Dependency Resolution]
+    S --> V
+    T --> V
+    U --> V
+    
+    %% Plan Generation
+    M --> W[📄 Execution Plan<br/>Generation]
+    V --> W
+    
+    %% Safety Analysis
+    W --> X[🛡️ Safety Analysis Agent]
+    X --> Y[⚠️ Risk Assessment<br/>Pattern Matching]
+    X --> Z[🔒 Security Validation<br/>Path & Command Check]
+    
+    Y --> AA[📊 Risk Level<br/>Determination]
+    Z --> AA
+    
+    %% Dynamic Confirmation System
+    AA --> BB{Risk Level?}
+    BB -->|Low/Medium| CC[✅ Simple Confirmation<br/>Agent]
+    BB -->|High| DD[⚡ Enhanced Confirmation<br/>Agent]
+    BB -->|Dangerous| EE[🚨 Maximum Security<br/>Confirmation Agent]
+    
+    %% User Confirmation Process
+    CC --> FF[👤 User Decision]
+    DD --> GG[📋 Step-by-Step Review<br/>+ Final Confirmation]
+    EE --> HH[🔐 Type CONFIRM<br/>+ Password + Final Check]
+    
+    GG --> FF
+    HH --> FF
+    
+    %% Execution or Rejection
+    FF --> II{Approved?}
+    II -->|No| JJ[❌ Plan Rejected<br/>Logged & Terminated]
+    II -->|Yes| KK[⚙️ Execution Orchestrator]
+    
+    %% Execution System
+    KK --> LL[🔄 Tool Selection<br/>& Routing Agent]
+    LL --> MM{Tool Type?}
+    
+    MM -->|Shell| NN[💻 Shell Execution<br/>Agent]
+    MM -->|Browser| OO[🌐 Browser Automation<br/>Agent]
+    MM -->|File Ops| PP[📁 File Operations<br/>Agent]
+    MM -->|Custom| QQ[🔧 Plugin Tool<br/>Agent]
+    
+    %% Tool Execution
+    NN --> RR[📊 Result Collection<br/>& Validation]
+    OO --> RR
+    PP --> RR
+    QQ --> RR
+    
+    %% Result Processing
+    RR --> SS[📋 Result Aggregation<br/>Agent]
+    SS --> TT[✅ Success/Failure<br/>Analysis]
+    
+    %% Memory Updates
+    TT --> UU[🧠 Memory Update Agent]
+    UU --> VV[💾 Session History<br/>Update]
+    UU --> WW[🔍 Vector Store<br/>Update - RAG]
+    UU --> XX[📊 Context Learning<br/>& Pattern Storage]
+    
+    %% Audit & Logging
+    VV --> YY[📝 Audit Logger<br/>Agent]
+    WW --> YY
+    XX --> YY
+    JJ --> YY
+    
+    YY --> ZZ[📋 Complete Action<br/>Audit Trail]
+    
+    %% Output Generation
+    TT --> AAA[📤 Response Generation<br/>Agent]
+    AAA --> BBB{Output Mode?}
+    BBB -->|Text| CCC[📝 Text Response]
+    BBB -->|Voice| DDD[🔊 Text-to-Speech<br/>Response]
+    
+    CCC --> EEE[✨ User Feedback<br/>& Session Update]
+    DDD --> EEE
+    
+    %% Continuous Learning Loop
+    EEE --> FFF[🔄 Feedback Analysis<br/>Agent]
+    FFF --> GGG[📈 Model Improvement<br/>& Adaptation]
+    GGG --> H
+    
+    %% Styling
+    classDef inputStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef agentStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef safetyStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef executionStyle fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef memoryStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef decisionStyle fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    
+    class A,B,C,D,E inputStyle
+    class F,K,N,O,R,S,T,U,V,LL,SS,UU,YY,AAA,FFF agentStyle
+    class X,Y,Z,AA,CC,DD,EE safetyStyle
+    class KK,NN,OO,PP,QQ,RR,TT executionStyle
+    class G,H,I,J,VV,WW,XX,GGG memoryStyle
+    class L,Q,BB,II,MM,BBB decisionStyle

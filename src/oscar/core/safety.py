@@ -1,5 +1,13 @@
 """
 OSCAR Safety Scanner - Simplified safety analysis and confirmation
+
+Role: Ensures nothing dangerous runs without your explicit approval
+
+What it does:
+- Scans all planned actions for dangerous patterns
+- Shows you exactly what will be executed
+- Requires confirmation based on risk level
+- Extra protection for high-risk operations
 """
 
 import re

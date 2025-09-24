@@ -1,5 +1,9 @@
 """
 OSCAR Shell Tool - Simplified cross-platform command execution
+
+- Executes system commands (like ls, mkdir, pip install)
+- Cross-platform (translates commands between Windows/Linux/Mac)
+- Safety-validated before execution
 """
 
 import subprocess

@@ -1,5 +1,14 @@
 """
 OSCAR Agent Orchestrator - Simplified main agent logic
+
+Role: Main orchestrator that manages the entire workflow
+
+What it does:
+- Takes the natural language request
+- Coordinates with the LLM Planner to create a structured plan
+- Runs safety checks
+- Gets the confirmation
+- Executes approved actions using tools
 """
 
 import json
