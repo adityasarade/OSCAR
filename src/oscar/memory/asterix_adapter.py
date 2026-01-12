@@ -37,15 +37,19 @@ class OSCARMemoryAdapter:
         try:
             from asterix import Agent, BlockConfig
             
+            # Memory block sizing rationale (qwen-qwq-32b has 131K context):
+            # - session_context: 4000 chars (~1K tokens) - stores recent interactions
+            # - knowledge_base: 3000 chars (~750 tokens) - stores search results/facts
+            # - user_preferences: 1000 chars (~250 tokens) - stores learned preferences
+            # Total: ~8K chars (~2K tokens) - small fraction of 131K, leaves room for planning
             self.agent = Agent(
                 agent_id=self.agent_id,
                 blocks={
-                    "session_context": BlockConfig(size=2000, priority=1),
-                    "user_preferences": BlockConfig(size=1000, priority=2),
-                    "knowledge_base": BlockConfig(size=3000, priority=3),
+                    "session_context": BlockConfig(size=4000, priority=1),
+                    "knowledge_base": BlockConfig(size=3000, priority=2),
+                    "user_preferences": BlockConfig(size=1000, priority=3),
                 },
-                model="qwen-qwq-32b",  # Match OSCAR's primary model
-                state_directory=str(self.state_dir)
+                model="qwen-qwq-32b"  # Match OSCAR's primary model
             )
             
             # Try to load existing state
