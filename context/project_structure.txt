@@ -1,0 +1,51 @@
+OSCAR/
+├── .env.example                 # Template for environment variables
+├── .env                        # Your actual API keys (gitignored)
+├── .gitignore                  # Already exists
+├── README.md                   # Already exists  
+├── requirements.txt            # Already exists
+├── config/                    # (config folder moved under src along with files)
+│   ├── __init__.py
+│   ├── llm_config.yaml        # LLM service configurations
+│   └── settings.py            # Configuration loader
+├── src/
+│   ├── __init__.py
+│   ├── oscar/
+│   │   ├── __init__.py
+│   │   ├── cli/
+│   │   │   ├── __init__.py
+│   │   │   └── main.py        # Main CLI entry point
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── agent.py       # Main agent orchestrator
+│   │   │   ├── planner.py     # LLM planning logic
+│   │   │   └── safety.py      # Safety checks and confirmations
+│   │   ├── speech/
+│   │   │   ├── __init__.py
+│   │   │   ├── stt.py         # Speech-to-text (Vosk)
+│   │   │   └── tts.py         # Text-to-speech (future)
+│   │   ├── tools/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py        # Base tool class
+│   │   │   ├── shell.py       # Shell command execution
+│   │   │   ├── browser.py     # Web automation (Playwright)
+│   │   │   └── file_ops.py    # File operations
+│   │   ├── memory/
+│   │   │   ├── __init__.py
+│   │   │   ├── vector_store.py # FAISS vector storage
+│   │   │   └── session.py     # Session history management
+│   │   └── utils/
+│   │       ├── __init__.py
+│   │       ├── logger.py      # Logging and audit trail
+│   │       ├── platform.py    # Cross-platform utilities
+│   │       └── validation.py  # Input validation
+├── data/
+│   ├── models/                # Vosk models will be downloaded here
+│   ├── memory/                # Vector store data
+│   └── logs/                  # Audit logs
+├── tests/
+│   ├── __init__.py
+│   ├── test_core/
+│   ├── test_tools/
+│   └── test_integration/
+└── setup.py                   # Package installation script

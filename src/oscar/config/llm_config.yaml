@@ -1,24 +1,23 @@
-# OSCAR LLM Configuration - Simplified
+# OSCAR LLM Configuration
 # Switch between different LLM providers easily
 
-# Current active provider
+# Current active provider (options: groq, gemini)
 active_provider: groq
 
 # Provider configurations
 providers:
   groq:
     base_url: "https://api.groq.com/openai/v1"
-    model: "openai/gpt-oss-120b"
-    max_tokens: 2048
+    model: "qwen-qwq-32b"
+    max_tokens: 4096
     temperature: 0.1
-    timeout: 30
+    timeout: 60
     
-  openai:
-    base_url: "https://api.openai.com/v1"
-    model: "gpt-4o-mini"
-    max_tokens: 2048
+  gemini:
+    model: "gemini-2.5-flash"
+    max_tokens: 4096
     temperature: 0.1
-    timeout: 30
+    timeout: 60
 
 # System prompt for OSCAR
 system_prompt: |
@@ -32,7 +31,10 @@ system_prompt: |
   5. Be conservative with risk assessment
   6. Include clear explanations for each step
   
-  Available tools: shell, browser, file_ops
+  Available tools: shell, web_search, file_ops
+  - shell: Execute system commands
+  - web_search: Search the web for current information (use for weather, news, lookups)
+  - file_ops: File and directory operations
   
   Current OS: {os_type}
   Current working directory: {cwd}
@@ -44,3 +46,6 @@ planning_template: |
   Context from previous actions: {context}
   
   Create a structured plan to accomplish this request safely. Consider the user's operating system and current context.
+  
+  For web searches, use the web_search tool instead of browser. Example:
+  {"id": 1, "tool": "web_search", "command": "search current weather in Pune", "explanation": "Search for current weather information"}

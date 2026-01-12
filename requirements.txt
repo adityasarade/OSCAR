@@ -1,5 +1,6 @@
 # Core dependencies
 groq>=0.4.1
+google-genai>=1.0.0
 pyyaml>=6.0
 python-dotenv>=1.0.0
 pydantic>=2.0.0
@@ -9,21 +10,17 @@ click>=8.1.0
 rich>=13.0.0
 colorama>=0.4.6
 
-# Web automation (optional - install with: pip install oscar-agent[browser])
+# Web search
+tavily-python>=0.5.0
+
+# Web automation (optional)
 playwright>=1.40.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 
-# Speech processing (for future phases)
-# vosk>=0.3.45
-# pyaudio>=0.2.11
-
-# Vector store (for future phases)  
-# faiss-cpu>=1.7.4
-# sentence-transformers>=2.2.0
-
 # System utilities
 psutil>=5.9.0
 
+# Memory layer
 asterix-agent>=0.1.4
 qdrant-client>=1.7.0

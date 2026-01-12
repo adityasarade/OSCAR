@@ -9,8 +9,7 @@ __pycache__/
 .env
 downloads/
 Research papers/
-description.txt
-project_structure.txt
+# context/
 
 data/logs/
 oscar_agent.egg-info/

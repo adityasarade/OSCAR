@@ -16,11 +16,11 @@ load_dotenv()
 
 class LLMProviderConfig(BaseModel):
     """Configuration for a single LLM provider."""
-    base_url: str
+    base_url: str = None  # Optional - Gemini doesn't use OpenAI-compatible endpoint
     model: str
-    max_tokens: int = 2048
+    max_tokens: int = 4096
     temperature: float = 0.1
-    timeout: int = 30
+    timeout: int = 60
 
 
 class LLMConfig(BaseModel):
@@ -72,7 +72,8 @@ class OSCARSettings:
         """Get API key for the specified provider from environment variables."""
         env_vars = {
             "groq": "GROQ_API_KEY",
-            "openai": "OPENAI_API_KEY"
+            "openai": "OPENAI_API_KEY",
+            "gemini": "GEMINI_API_KEY"
         }
         
         env_var = env_vars.get(provider.lower())
@@ -84,6 +85,15 @@ class OSCARSettings:
             raise ValueError(f"API key not found for {provider}. Please set {env_var} in your .env file")
         
         return api_key
+    
+    def get_tavily_keys(self) -> list:
+        """Get Tavily API keys for web search with fallback support."""
+        keys = []
+        for key_name in ["TAVILY_API_KEY1", "TAVILY_API_KEY2"]:
+            key = os.getenv(key_name)
+            if key:
+                keys.append(key)
+        return keys
     
     # Simple property getters
     @property

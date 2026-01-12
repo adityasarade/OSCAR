@@ -4,7 +4,7 @@ OSCAR LLM Planner - Streamlined planning engine
 Role: Converts natural language requests into structured action plans.
 
 What it does:
-- Sends the request to an LLM
+- Sends the request to an LLM (Groq or Gemini)
 - Gets back a structured JSON plan with step-by-step actions
 - Assesses risk levels for each step
 """
@@ -14,7 +14,6 @@ import re
 import platform
 from typing import List, Dict, Any
 from pathlib import Path
-from groq import Groq
 from pydantic import BaseModel, ValidationError
 
 from oscar.config.settings import settings, SAFETY_PATTERNS
@@ -50,16 +49,21 @@ class LLMPlanner:
         self.system_context = {
             "os_type": platform.system(),
             "cwd": str(Path.cwd()),
-            "available_tools": ["shell", "browser", "file_ops"]
+            "available_tools": ["shell", "web_search", "file_ops"]
         }
     
     def _init_client(self):
-        """Initialize the LLM client."""
+        """Initialize the LLM client based on provider."""
         try:
             api_key = settings.get_api_key(self.provider)
             
             if self.provider == "groq":
+                from groq import Groq
                 return Groq(api_key=api_key)
+            elif self.provider == "gemini":
+                import google.genai as genai
+                genai.configure(api_key=api_key)
+                return genai
             elif self.provider == "openai":
                 from openai import OpenAI
                 return OpenAI(api_key=api_key)
@@ -132,40 +136,34 @@ class LLMPlanner:
         )
     
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
-        """Call the LLM API."""
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
+        """Call the LLM API based on provider."""
         try:
-            if self.provider== "groq":
-                if settings.llm_config.providers.get("groq").model == "openai/gpt-oss-120b":
-                    # For GPT-OSS reasoning
-                    response = self.client.chat.completions.create(
-                        model=self.config.model,
-                        messages=messages,
-                        max_tokens=self.config.max_tokens,
-                        temperature=self.config.temperature,
-                        reasoning_effort="medium" 
-                    )
-
-                else:  # For other Groq models
-                    response = self.client.chat.completions.create(
-                        model=self.config.model,
-                        messages=messages,
-                        max_tokens=self.config.max_tokens,
-                        temperature=self.config.temperature
-                    )
-            else:  # OpenAI
+            if self.provider == "gemini":
+                # Gemini uses different API structure
+                model = self.client.GenerativeModel(self.config.model)
+                combined_prompt = f"{system_prompt}\n\n{user_prompt}"
+                response = model.generate_content(
+                    combined_prompt,
+                    generation_config={
+                        "max_output_tokens": self.config.max_tokens,
+                        "temperature": self.config.temperature
+                    }
+                )
+                return response.text
+            else:
+                # Groq/OpenAI use OpenAI-compatible API
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+                
                 response = self.client.chat.completions.create(
                     model=self.config.model,
                     messages=messages,
                     max_tokens=self.config.max_tokens,
                     temperature=self.config.temperature
                 )
-            
-            return response.choices[0].message.content
+                return response.choices[0].message.content
             
         except Exception as e:
             raise RuntimeError(f"LLM API call failed: {e}")

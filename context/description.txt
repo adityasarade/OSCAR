@@ -1,0 +1,190 @@
+Project Title
+OSCAR — Operating System’s Complete Agentic Rex
+
+One-line Goal
+Create a single-user, local, voice-and-text-driven agent that translates natural-language goals into safe, multi-step system and web automation, presents a clear plan for human approval, and executes only after explicit consent.
+
+High-level Description
+OSCAR is an intelligent, local copilot for developers and power users. It accepts trigger-based voice or typed instructions, decomposes a high-level goal into a structured sequence of actions using an LLM-guided agentic reasoning loop, shows the user an explicit plan (with step explanations), requests confirmation, and then executes verified actions on the host machine. Actions include shell commands, application control, browser automation for web discovery and downloads, file operations, and simple communication tasks. OSCAR is cross-platform (Linux/macOS/Windows) and focused on strong human-in-the-loop safety: nothing runs without user approval. The initial scope is single-user, local deployment.
+
+Primary Objectives
+Provide a trustworthy natural-language interface to perform multi-step system tasks safely.
+
+Use agentic LLM reasoning to plan coherent workflows (chain-of-thought / ReAct style).
+
+Integrate speech I/O for trigger-based voice commands and fallback text input.
+
+Support web automation for search, navigation, and downloads.
+
+Ensure cross-platform command mapping (apt/dnf/brew/winget).
+
+Maintain detailed logging and an auditable confirmation workflow.
+
+Functional Requirements
+Trigger-based input: voice mode (push-to-talk / hotkey) or typed input.
+
+STT: local lightweight (Vosk) or cloud STT option (Whisper API) selectable.
+
+LLM planner: sends structured prompts and receives stepwise plans.
+
+Plan presentation: human-readable plan (and optional TTS readback) with per-step explanations.
+
+Explicit confirmation UI (CLI prompt or voice confirmation) before any action.
+
+Execution engine: runs shell commands, browser automation (Playwright/Selenium), file ops, app launch.
+
+Safety scanner: rule-based filter for destructive patterns and additional confirmation for high-risk actions.
+
+Context memory: short-term session history + optional vector store for relevant prior context.
+
+Extensibility: plugin/tool API to add new capabilities.
+
+Non-functional Requirements
+Single-user, local-first operation with optional internet access for LLM/STT APIs.
+
+Low hardware dependency: no heavy GPU needs for core functionality.
+
+Cross-platform abstraction for system commands and paths.
+
+Minimal external dependencies and clear configuration for API keys.
+
+Core Architecture (summary)
+CLI Engine: main REPL and orchestrator, accepts voice/text and manages sessions.
+
+Speech I/O Layer: audio capture → STT → text; optional TTS for spoken responses.
+
+LLM Planner: sends structured prompts to LLM API; expects a structured plan back.
+
+Action Dispatcher / Tools Layer: small toolkit for shell, browser, file, email, scheduler.
+
+Confirmation & Safety Layer: plan sanitizer, risk flags, human approval step.
+
+Execution Engine: performs approved actions, captures stdout/stderr and status codes.
+
+Memory Store: local vector DB or file-based history for context retrieval.
+
+Logger/Audit Trail: persistent record of all proposed and executed steps plus approvals.
+
+Agent Reasoning & Prompting (expected schema)
+Use ReAct/Chain-of-Thought prompting. Encourage structured outputs so downstream code can parse them reliably.
+
+Recommended LLM output format (JSON-like or strict JSON):
+
+json
+Copy
+Edit
+{
+  "thoughts": "analysis text explaining reasoning",
+  "plan": [
+    {"id":1, "tool":"shell", "command":"sudo apt-get update -y", "explanation":"update package index"},
+    {"id":2, "tool":"shell", "command":"sudo apt-get install python3.9 -y", "explanation":"install python 3.9"},
+    {"id":3, "tool":"shell", "command":"python3.9 -m venv venv", "explanation":"create virtual env"}
+  ],
+  "risk_level":"low",
+  "confirm_prompt":"Approve execution of these 3 steps? (yes/no)"
+}
+The CLI must parse this structured plan, display it, and prompt user for approval.
+
+Safety Model
+Rule-based scanner: detect destructive regexes (e.g., rm\s+-rf\s+, dd if=, partitioning commands, force reboots) and elevate to “dangerous” status.
+
+User approval: All plans require explicit yes/no confirmation before execution. For dangerous steps, require stronger confirmation (typed CONFIRM or admin password).
+
+Dry-run mode: preview only, no execution.
+
+Logging: every proposal, approval, and executed command is logged with timestamps and exit codes.
+
+Optional sandboxing: future extension to run risky steps inside container/VM.
+
+Cross-Platform Adaptation
+Detect OS at startup (platform module) and include OS metadata in prompts.
+
+Keep a translation layer: high-level intent install_package(name) → mapping per OS: apt/dnf/brew/winget or python -m pip install.
+
+Maintain a small data file of package name mappings and commonly used command templates per OS.
+
+Web Automation
+Expose a BrowserTool with primitives: goto(url), search(query), click(selector/text), download(link), scrape(selector).
+
+Browser automation runs headless or headed; downloads routed to a controlled directory.
+
+Plans that use web automation are displayed with target URLs and download filenames for consent.
+
+Memory & Context
+Short-term session history kept in memory and appended into prompts as required.
+
+Optional vector store (FAISS/Chroma) for long-term semantic recall of prior actions/preferences (configurable).
+
+Only include top-K relevant memories to keep prompt size constrained.
+
+Plugin System
+Define a simple Plugin API (Tool class with standardized name, describe(), run(args)).
+
+Plugins register in a folder or via entry points; CLI lists available plugins.
+
+Plugin safety: plugins must declare risk level and are subject to the same confirmation model.
+
+Implementation Roadmap & Milestones (for a 3-person team; 12–16 weeks suggested)
+Phase 0 — Project Setup (Week 1)
+
+Repo skeleton, virtualenv, config system for API keys, logging, CLI scaffolding.
+
+Phase 1 — Core REPL + LLM Integration (Weeks 2–3)
+
+Integrate chosen LLM API; implement ReAct prompt template; verify structured plan output.
+
+Phase 2 — Shell Action Module & Safety (Weeks 4–5)
+
+Implement shell runner, risk scanner, dry-run mode, logging, OS detection and basic command translation.
+
+Phase 3 — Speech I/O (Weeks 6–7)
+
+Add trigger-based STT (Vaapi/Vosk/Whisper API), TTS optional, and hotkey/push-to-talk behavior.
+
+Phase 4 — Browser Tool & Web Automation (Weeks 8–9)
+
+Implement Playwright/Selenium wrapper; controlled download directory; consent workflow for web actions.
+
+Phase 5 — Memory & Context (Weeks 10–11)
+
+Implement session history, optional vector store, and retrieval hooks for prompts.
+
+Phase 6 — Plugins & Additional Tools (Weeks 12–13)
+
+File cleanup, app launcher, basic email integration, scheduler.
+
+Phase 7 — Testing, Hardening & Demo (Weeks 14–16)
+
+Cross-OS testing, safety regression tests, user acceptance tests, prepare demonstration scenario and documentation.
+
+Testing & Evaluation
+Unit tests for each tool and the safety scanner.
+
+Integration tests for full flows: voice input → plan → confirm → execute.
+
+Metrics for acceptance: plan correctness, false-positive/false-negative rate of safety scanner, execution success rate, average time to complete common tasks.
+
+User acceptance testing with scripted tasks: e.g., create venv, download file from web, clean Downloads older than 30 days.
+
+Team Roles (example)
+Lead / Architect: overall design, prompt engineering, LLM integration, core orchestration.
+
+Tooling & Executor: shell runner, browser automation, OS abstraction layer.
+
+Voice + UX + Testing: STT/TTS integration, CLI UX, logging, test automation, demo preparation.
+
+Required Resources
+Development machines (Linux/macOS/Windows for testing or VMs).
+
+API keys for chosen LLM and optional STT/TTS services (Groq, Gemini, OpenAI, Whisper).
+
+Playwright/Selenium browser drivers.
+
+No mandatory GPU; optional for local LLM experiments later.
+
+Deliverables (for HOD / Thesis)
+Code repository with installation and usage docs.
+
+Design document & architecture diagrams.
+
+Test report, safety analysis, and an audit log sample.
