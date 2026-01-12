@@ -188,8 +188,14 @@ class LLMPlanner:
     def _parse_llm_response(self, raw_response: str) -> AgentPlan:
         """Parse and validate the LLM response."""
         try:
+            # Debug: show first 500 chars of raw response
+            console.print(f"[dim] Raw response (first 500 chars): {raw_response[:500]}...[/dim]")
+            
             # Clean the response
             cleaned_response = self._clean_json_response(raw_response)
+            
+            # Debug: show cleaned response
+            console.print(f"[dim] Cleaned (first 300 chars): {cleaned_response[:300]}...[/dim]")
             
             # Parse JSON
             response_data = json.loads(cleaned_response)
@@ -198,14 +204,17 @@ class LLMPlanner:
             return AgentPlan(**response_data)
             
         except json.JSONDecodeError as e:
+            console.print(f"[red]JSON Error: {e}[/red]")
+            console.print(f"[red]Response was: {cleaned_response[:200]}[/red]")
             raise ValueError(f"Invalid JSON response from LLM: {e}")
         except ValidationError as e:
+            console.print(f"[red]Validation Error: {e}[/red]")
             raise ValueError(f"Invalid plan structure: {e}")
     
     def _clean_json_response(self, response: str) -> str:
         """Clean LLM response to extract valid JSON.
         
-        Handles qwen-qwq-32b which outputs reasoning/thinking before JSON.
+        Handles qwen/qwen3-32b which outputs reasoning/thinking before JSON.
         """
         # Remove markdown code blocks
         response = re.sub(r'```json\s*', '', response)

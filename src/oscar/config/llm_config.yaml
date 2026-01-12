@@ -8,7 +8,7 @@ active_provider: groq
 providers:
   groq:
     base_url: "https://api.groq.com/openai/v1"
-    model: "qwen-qwq-32b"
+    model: "qwen/qwen3-32b"
     max_tokens: 4096
     temperature: 0.1
     timeout: 60
@@ -48,4 +48,4 @@ planning_template: |
   Create a structured plan to accomplish this request safely. Consider the user's operating system and current context.
   
   For web searches, use the web_search tool instead of browser. Example:
-  {"id": 1, "tool": "web_search", "command": "search current weather in Pune", "explanation": "Search for current weather information"}
+  {{"id": 1, "tool": "web_search", "command": "search current weather in Pune", "explanation": "Search for current weather information"}}

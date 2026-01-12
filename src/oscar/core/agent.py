@@ -149,9 +149,9 @@ class OSCARAgent:
             result["stage"] = "error"
             console.print(f"[red]✗[/red] Error during {result['stage']}: {e}")
             
-            if settings.debug_mode:
-                import traceback
-                traceback.print_exc()
+            # Always show traceback for now (debugging)
+            import traceback
+            traceback.print_exc()
         
         finally:
             # Log interaction and update history
