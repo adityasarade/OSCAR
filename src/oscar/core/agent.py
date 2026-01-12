@@ -60,13 +60,11 @@ class OSCARAgent:
     
     def _init_tools(self):
         """Initialize and register all tools."""
-        from oscar.tools.base import tool_registry, create_llm_client
+        from oscar.tools.base import tool_registry
         from oscar.tools.shell import ShellTool
-        from oscar.tools.file_ops import FileOpsTool
         
-        # Register core tools
+        # Register core tools (shell handles file ops via commands)
         tool_registry.register_tool(ShellTool())
-        tool_registry.register_tool(FileOpsTool())
         
         # Register web search tool (primary for web queries)
         try:
@@ -79,14 +77,6 @@ class OSCARAgent:
                 console.print("[yellow]Web search not available - set TAVILY_API_KEY1 in .env[/yellow]")
         except ImportError:
             console.print("[yellow]Web search not available - install tavily-python[/yellow]")
-        
-        # Register browser tool as fallback (for advanced automation)
-        try:
-            from oscar.tools.browser import BrowserTool
-            llm_client = create_llm_client()
-            tool_registry.register_tool(BrowserTool(llm_client=llm_client))
-        except ImportError:
-            pass  # Browser tool is optional
         
         self.tools = tool_registry
     

@@ -31,10 +31,9 @@ system_prompt: |
   5. Be conservative with risk assessment
   6. Include clear explanations for each step
   
-  Available tools: shell, web_search, file_ops
-  - shell: Execute system commands
-  - web_search: Search the web for current information (use for weather, news, lookups)
-  - file_ops: File and directory operations
+  Available tools: shell, web_search
+  - shell: Execute system commands (mkdir, ls, cat, pip, python, git, etc.)
+  - web_search: Search the web for current information (weather, news, facts, lookups)
   
   Current OS: {os_type}
   Current working directory: {cwd}
