@@ -33,6 +33,9 @@ class OSCARAgent:
         self.planner = LLMPlanner()
         self.session_history: List[Dict[str, Any]] = []
         
+        # Initialize memory adapter
+        self._init_memory()
+        
         # Initialize tools
         self._init_tools()
         
@@ -42,23 +45,48 @@ class OSCARAgent:
         
         console.print("[dim]OSCAR Agent initialized with tools ready[/dim]")
     
+    def _init_memory(self):
+        """Initialize Asterix memory adapter."""
+        try:
+            from oscar.memory.asterix_adapter import OSCARMemoryAdapter
+            self.memory = OSCARMemoryAdapter()
+            if self.memory.is_available:
+                console.print("[dim]Memory system loaded[/dim]")
+            else:
+                self.memory = None
+        except Exception as e:
+            console.print(f"[yellow]Memory not available: {e}[/yellow]")
+            self.memory = None
+    
     def _init_tools(self):
         """Initialize and register all tools."""
         from oscar.tools.base import tool_registry, create_llm_client
         from oscar.tools.shell import ShellTool
         from oscar.tools.file_ops import FileOpsTool
         
-        # Register basic tools
+        # Register core tools
         tool_registry.register_tool(ShellTool())
         tool_registry.register_tool(FileOpsTool())
         
-        # Register browser tool if Playwright is available
+        # Register web search tool (primary for web queries)
+        try:
+            from oscar.tools.web_search import WebSearchTool
+            web_search = WebSearchTool()
+            if web_search.is_available:
+                tool_registry.register_tool(web_search)
+                console.print("[dim]Web search tool loaded[/dim]")
+            else:
+                console.print("[yellow]Web search not available - set TAVILY_API_KEY1 in .env[/yellow]")
+        except ImportError:
+            console.print("[yellow]Web search not available - install tavily-python[/yellow]")
+        
+        # Register browser tool as fallback (for advanced automation)
         try:
             from oscar.tools.browser import BrowserTool
             llm_client = create_llm_client()
             tool_registry.register_tool(BrowserTool(llm_client=llm_client))
         except ImportError:
-            console.print("[yellow]Browser tool not available - install playwright[/yellow]")
+            pass  # Browser tool is optional
         
         self.tools = tool_registry
     
@@ -231,7 +259,12 @@ class OSCARAgent:
         return execution_result
     
     def _get_recent_context(self) -> str:
-        """Get context from recent interactions."""
+        """Get context from memory and recent interactions."""
+        # Try to get context from Asterix memory first
+        if self.memory and self.memory.is_available:
+            return self.memory.get_relevant_context()
+        
+        # Fallback to session history
         if not self.session_history:
             return "No previous interactions"
         
@@ -245,7 +278,12 @@ class OSCARAgent:
         return "Recent actions:\n" + "\n".join(context_parts)
     
     def _add_to_history(self, result: Dict[str, Any]) -> None:
-        """Add interaction to session history."""
+        """Add interaction to session history and memory."""
+        # Store in Asterix memory
+        if self.memory and self.memory.is_available:
+            self.memory.store_interaction(result["user_input"], result)
+        
+        # Also keep session history
         self.session_history.append({
             "timestamp": datetime.now().isoformat(),
             "user_input": result["user_input"],

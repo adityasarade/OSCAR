@@ -86,12 +86,17 @@ class ToolRegistry:
         """Suggest the best tool for executing a command."""
         command_lower = command.lower()
         
-        # Simple keyword-based tool suggestion
-        if any(keyword in command_lower for keyword in ["mkdir", "ls", "dir", "cd", "pip", "python"]):
+        # Shell commands
+        if any(keyword in command_lower for keyword in ["mkdir", "ls", "dir", "cd", "pip", "python", "npm", "git"]):
             return self.get_tool("shell")
-        elif any(keyword in command_lower for keyword in ["browse", "search", "download", "web"]):
+        # Web search (preferred for information lookup)
+        elif any(keyword in command_lower for keyword in ["search", "weather", "news", "find online", "lookup", "what is"]):
+            return self.get_tool("web_search") or self.get_tool("browser")
+        # Browser for advanced web automation
+        elif any(keyword in command_lower for keyword in ["download", "navigate", "click", "browse"]):
             return self.get_tool("browser")
-        elif any(keyword in command_lower for keyword in ["create file", "copy", "move", "read file"]):
+        # File operations
+        elif any(keyword in command_lower for keyword in ["create file", "copy", "move", "read file", "write file"]):
             return self.get_tool("file_ops")
         
         return None

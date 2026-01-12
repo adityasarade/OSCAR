@@ -18,14 +18,16 @@ class WebSearchTool(BaseTool):
     """Web search tool using Tavily API with dual-key fallback."""
     
     def __init__(self):
+        # Initialize clients BEFORE super().__init__ because it calls _check_availability
+        self.clients = self._init_clients_internal()
+        self.current_key_index = 0
+        
         super().__init__(
             name="web_search",
             description="Search the web for current information using AI-optimized search"
         )
-        self.clients = self._init_clients()
-        self.current_key_index = 0
     
-    def _init_clients(self) -> List:
+    def _init_clients_internal(self) -> List:
         """Initialize Tavily clients with available API keys."""
         clients = []
         try:
