@@ -11,12 +11,16 @@ What it does:
 
 import json
 import re
+import time
 import platform
 from typing import List, Dict, Any
 from pathlib import Path
 from pydantic import BaseModel, ValidationError
+from rich.console import Console
 
 from oscar.config.settings import settings, SAFETY_PATTERNS
+
+console = Console()
 
 class ActionStep(BaseModel):
     """Individual action step in a plan."""
@@ -75,19 +79,32 @@ class LLMPlanner:
     
     def create_plan(self, user_input: str, context: str = "") -> AgentPlan:
         """Create a structured plan from natural language input."""
+        timings = {}
+        total_start = time.time()
         
         # Build prompts
+        t0 = time.time()
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_user_prompt(user_input, context)
+        timings['prompt_build'] = time.time() - t0
         
         # Call LLM
+        t0 = time.time()
         raw_response = self._call_llm(system_prompt, user_prompt)
+        timings['llm_call'] = time.time() - t0
         
         # Parse and validate response
+        t0 = time.time()
         plan = self._parse_llm_response(raw_response)
+        timings['parse'] = time.time() - t0
         
         # Assess overall risk
         plan.risk_level = self._assess_overall_risk(plan)
+        
+        timings['total'] = time.time() - total_start
+        
+        # Log timing breakdown
+        console.print(f"[dim]⏱ Timing: LLM={timings['llm_call']:.1f}s, Parse={timings['parse']:.2f}s, Total={timings['total']:.1f}s[/dim]")
         
         return plan
     
@@ -186,17 +203,43 @@ class LLMPlanner:
             raise ValueError(f"Invalid plan structure: {e}")
     
     def _clean_json_response(self, response: str) -> str:
-        """Clean LLM response to extract valid JSON."""
+        """Clean LLM response to extract valid JSON.
+        
+        Handles qwen-qwq-32b which outputs reasoning/thinking before JSON.
+        """
         # Remove markdown code blocks
         response = re.sub(r'```json\s*', '', response)
         response = re.sub(r'```\s*', '', response)
         
-        # Extract JSON object
+        # Try to find a complete JSON object with nested structure
+        # This regex handles nested braces properly
+        brace_count = 0
+        start_idx = -1
+        end_idx = -1
+        
+        for i, char in enumerate(response):
+            if char == '{':
+                if brace_count == 0:
+                    start_idx = i
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0 and start_idx != -1:
+                    end_idx = i
+                    break
+        
+        if start_idx != -1 and end_idx != -1:
+            extracted = response[start_idx:end_idx + 1]
+            # Validate it's actually JSON-like
+            if '"thoughts"' in extracted or '"plan"' in extracted:
+                return extracted
+        
+        # Fallback: simple extraction
         start_idx = response.find('{')
         end_idx = response.rfind('}')
         
         if start_idx != -1 and end_idx != -1:
-            response = response[start_idx:end_idx + 1]
+            return response[start_idx:end_idx + 1]
         
         return response.strip()
     
