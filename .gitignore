@@ -2,6 +2,9 @@
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
+dist/
+build/
 
 # Ignore OS-specific junk
 .DS_Store
@@ -12,5 +15,4 @@ Research papers/
 # context/
 
 data/logs/
-oscar_agent.egg-info/
 data/agent_states/

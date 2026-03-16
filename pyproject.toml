@@ -1,0 +1,67 @@
+[project]
+name = "oscar-agent"
+version = "0.2.0"
+description = "OSCAR - Operating System's Complete Agentic Rex"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "OSCAR Team" }]
+keywords = [
+    "ai",
+    "agent",
+    "automation",
+    "llm",
+    "voice-assistant",
+    "system-administration",
+    "agentic",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+]
+dependencies = [
+    "groq>=0.4.1",
+    "google-genai>=1.0.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "colorama>=0.4.6",
+    "tavily-python>=0.5.0",
+    "playwright>=1.40.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "psutil>=5.9.0",
+    "asterix-agent>=0.1.4",
+    "qdrant-client>=1.7.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0.0", "black>=23.0.0", "isort>=5.12.0"]
+
+[project.scripts]
+oscar = "oscar.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/adityasarade/OSCAR"
+Repository = "https://github.com/adityasarade/OSCAR"
+Issues = "https://github.com/adityasarade/OSCAR"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oscar"]
