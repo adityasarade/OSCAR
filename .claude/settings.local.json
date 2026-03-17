@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(python:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(.venv/bin/python -c \"import google.genai; print\\(dir\\(google.genai\\)\\)\")",
+      "Bash(.venv/bin/python -c \"from google import genai; c = genai.Client\\(api_key='test'\\); print\\(type\\(c\\)\\); print\\([m for m in dir\\(c\\) if not m.startswith\\('_'\\)]\\)\" 2>&1)",
+      "Bash(.venv/bin/python -c \"import google.genai; print\\(google.genai.__version__\\)\" 2>&1)",
+      "Bash(.venv/bin/python -c \"from google import genai; c = genai.Client\\(api_key='test'\\); print\\([m for m in dir\\(c.models\\) if not m.startswith\\('_'\\)]\\)\" 2>&1)"
     ]
   }
 }
