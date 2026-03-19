@@ -53,7 +53,7 @@ class LLMPlanner:
         self.system_context = {
             "os_type": platform.system(),
             "cwd": str(Path.cwd()),
-            "available_tools": ["shell", "web_search", "git"]
+            "available_tools": ["shell", "web_search", "git", "browser"]
         }
     
     def _init_client(self):
@@ -131,7 +131,7 @@ class LLMPlanner:
                 "plan": [
                     {{
                         "id": 1,
-                        "tool": "shell|web_search|git",
+                        "tool": "shell|web_search|git|browser",
                         "command": "exact command to execute directly in terminal with NO errors",
                         "explanation": "what this step does",
                         "risk_level": "low|medium|high|dangerous"
