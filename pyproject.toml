@@ -1,7 +1,7 @@
 [project]
 name = "oscar-agent"
-version = "0.2.0"
-description = "OSCAR - Operating System's Complete Agentic Rex"
+version = "0.3.0"
+description = "OSCAR - GitHub-Specialized AI Coding Assistant"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -9,10 +9,11 @@ authors = [{ name = "OSCAR Team" }]
 keywords = [
     "ai",
     "agent",
-    "automation",
+    "github",
+    "code-review",
+    "git",
+    "vscode",
     "llm",
-    "voice-assistant",
-    "system-administration",
     "agentic",
 ]
 classifiers = [
@@ -44,7 +45,9 @@ dependencies = [
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.0",
     "psutil>=5.9.0",
-    "asterix-agent>=0.1.4",
+    "asterix-agent>=0.2.1",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
     "qdrant-client>=1.7.0",
 ]
 
@@ -53,6 +56,7 @@ dev = ["pytest>=7.0.0", "black>=23.0.0", "isort>=5.12.0"]
 
 [project.scripts]
 oscar = "oscar.cli.main:main"
+oscar-server = "oscar.api.server:start_server"
 
 [project.urls]
 Homepage = "https://github.com/adityasarade/OSCAR"

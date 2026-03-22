@@ -337,6 +337,7 @@ def apply_patches():
         self,
         messages: Union[str, List[LLMMessage]],
         provider: Optional[str] = None,
+        model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
@@ -359,11 +360,13 @@ def apply_patches():
                 )
             elif selected_provider == "groq":
                 return await self._call_groq(
-                    messages, temperature, max_tokens, tools, tool_choice
+                    messages, model or "llama-3.3-70b-versatile",
+                    temperature, max_tokens, tools, tool_choice
                 )
             elif selected_provider == "openai":
                 return await self._call_openai(
-                    messages, temperature, max_tokens, tools, tool_choice
+                    messages, model or "gpt-4o",
+                    temperature, max_tokens, tools, tool_choice
                 )
             else:
                 raise LLMError(f"Unknown provider: {selected_provider}")
@@ -381,6 +384,7 @@ def apply_patches():
                     self,
                     messages,
                     provider=self._fallback_provider,
+                    model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     tools=tools,
