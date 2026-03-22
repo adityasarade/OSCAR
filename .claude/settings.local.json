@@ -23,7 +23,12 @@
       "Bash(npm install:*)",
       "Bash(.venv/bin/python -c \"from oscar.core.safety import on_before_tool_call; print\\('safety.py OK — low risk auto-approve:', on_before_tool_call\\('git_status', {}\\)\\)\")",
       "Bash(.venv/bin/python -c \"from oscar.core.asterix_patch import apply_patches; print\\('asterix_patch.py OK — patches applied'\\)\")",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(grep -E '\\\\.env$|agent_states|audit\\\\.jsonl|node_modules|\\\\.pyc|__pycache__|\\\\.DS_Store|downloads/|asterix-changes')",
+      "Bash(grep -E 'agent_states|\\\\.env$|data/logs|asterix-changes|\\\\.DS_Store|out/')",
+      "Bash(grep '\\\\.env$')",
+      "Bash(uv run:*)",
+      "Bash(git rm:*)"
     ]
   }
 }

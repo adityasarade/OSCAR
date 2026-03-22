@@ -1,390 +1,251 @@
 """
-OSCAR Agent Orchestrator - Simplified main agent logic
+OSCAR Agent — Asterix-powered GitHub coding assistant.
 
-Role: Main orchestrator that manages the entire workflow
+Creates an Asterix Agent with Gemini 2.5 Flash via Vertex AI, registers all
+OSCAR tools, and patches in safety/audit/progress callbacks.
 
-What it does:
-- Takes the natural language request
-- Coordinates with the LLM Planner to create a structured plan
-- Runs safety checks
-- Gets the confirmation
-- Executes approved actions using tools
+Usage:
+    from oscar.core.agent import get_agent
+    response = get_agent().chat("compare main and dev")
 """
 
 import json
-from typing import Dict, Any, List
+import platform
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, List
+
 from rich.console import Console
 
-from oscar.core.planner import LLMPlanner, AgentPlan
-from oscar.core.safety import analyze_and_confirm_plan
+# Apply Asterix patches (idempotent — adds Gemini/Vertex AI support)
+import oscar.core.asterix_patch  # noqa: F401
+
+from asterix import Agent, BlockConfig
+
+from oscar.config.prompts import SYSTEM_PROMPT
+from oscar.core.safety import on_before_tool_call
 from oscar.config.settings import settings
+
+# Tool imports
+from oscar.tools.git_tool import (
+    git_status, git_compare, git_review, git_log,
+    git_diff, git_branches, git_checkout, git_commit, git_push,
+)
+from oscar.tools.shell import run_shell_command
+from oscar.tools.web_search import web_search
+from oscar.tools.browser import (
+    browser_navigate, browser_search, browser_extract, browser_download,
+)
 
 console = Console()
 
+# ---------------------------------------------------------------------------
+# Audit logging
+# ---------------------------------------------------------------------------
 
-class OSCARAgent:
-    """
-    Simplified OSCAR agent that orchestrates the workflow:
-    Input → Planning → Safety → Confirmation → Execution
-    """
-    
-    def __init__(self):
-        self.planner = LLMPlanner()
-        self.session_history: List[Dict[str, Any]] = []
-        
-        # Initialize memory adapter
-        self._init_memory()
-        
-        # Initialize tools
-        self._init_tools()
-        
-        # Initialize audit logging
-        self.audit_log_path = settings.data_dir / "logs" / "audit.jsonl"
-        self.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        console.print("[dim]OSCAR Agent initialized with tools ready[/dim]")
-    
-    def _init_memory(self):
-        """Initialize Asterix memory adapter."""
-        try:
-            from oscar.memory.asterix_adapter import OSCARMemoryAdapter
-            self.memory = OSCARMemoryAdapter()
-            if self.memory.is_available:
-                console.print("[dim]Memory system loaded[/dim]")
-            else:
-                self.memory = None
-        except Exception as e:
-            console.print(f"[yellow]Memory not available: {e}[/yellow]")
-            self.memory = None
-    
-    def _init_tools(self):
-        """Initialize and register all tools."""
-        from oscar.tools.base import tool_registry
-        from oscar.tools.shell import ShellTool
-        
-        # Register core tools (shell handles file ops via commands)
-        tool_registry.register_tool(ShellTool())
-        
-        # Register web search tool (primary for web queries)
-        try:
-            from oscar.tools.web_search import WebSearchTool
-            web_search = WebSearchTool()
-            if web_search.is_available:
-                tool_registry.register_tool(web_search)
-                console.print("[dim]Web search tool loaded[/dim]")
-            else:
-                console.print("[yellow]Web search not available - set TAVILY_API_KEY1 in .env[/yellow]")
-        except ImportError:
-            console.print("[yellow]Web search not available - install tavily-python[/yellow]")
-        
-        self.tools = tool_registry
-    
-    def process_request(self, user_input: str) -> Dict[str, Any]:
-        """Process a complete user request through the pipeline."""
-        
-        result = {
-            "user_input": user_input,
-            "success": False,
-            "stage": "input",
-            "plan": None,
-            "safety_report": None,
-            "execution_result": None,
-            "error": None
-        }
-        
-        try:
-            # Stage 1: Planning
-            console.print("\n🧠 [bold blue]Planning...[/bold blue]")
-            with console.status("[bold blue]Generating plan..."):
-                result["stage"] = "planning"
-                context = self._get_recent_context()
-                plan = self.planner.create_plan(user_input, context)
-                result["plan"] = plan
-            
-            console.print("[green]✓[/green] Plan generated successfully")
-            
-            # Stage 2: Safety Analysis & Confirmation
-            # console.print("\n🛡️  [bold yellow]Safety Analysis...[/bold yellow]")
-            result["stage"] = "safety"
-            
-            approved, safety_report = analyze_and_confirm_plan(plan)
-            result["safety_report"] = safety_report
-            
-            if not approved:
-                result["stage"] = "rejected"
-                console.print("[yellow]⚠️  Plan rejected by user[/yellow]")
-                self._log_interaction(result)
-                return result
-            
-            console.print("[green]✓[/green] Plan approved by user")
-            
-            # Stage 3: Execution
-            console.print("\n⚙️  [bold green]Executing...[/bold green]")
-            result["stage"] = "execution"
-            
-            execution_result = self._execute_plan(plan)
-            result["execution_result"] = execution_result
-            
-            if execution_result["success"]:
-                result["success"] = True
-                result["stage"] = "completed"
-                console.print("[green]✓[/green] Execution completed successfully")
-            else:
-                result["stage"] = "execution_failed"
-                console.print(f"[red]✗[/red] Execution failed: {execution_result.get('error')}")
-            
-        except Exception as e:
-            result["error"] = str(e)
-            result["stage"] = "error"
-            console.print(f"[red]✗[/red] Error during {result['stage']}: {e}")
-            
-            # Always show traceback for now (debugging)
-            import traceback
-            traceback.print_exc()
-        
-        finally:
-            # Log interaction and update history
-            self._log_interaction(result)
-            self._add_to_history(result)
-        
-        return result
-    
-    def _execute_plan(self, plan: AgentPlan) -> Dict[str, Any]:
-        """Execute the approved plan using tools."""
-        
-        execution_result = {
-            "success": False,
-            "steps_completed": 0,
-            "total_steps": len(plan.plan),
-            "step_results": [],
-            "error": None
-        }
-        
-        try:
-            # Dry-run mode simulation
-            if settings.dry_run_mode:
-                console.print("[yellow]🧪 DRY RUN MODE - Simulating execution[/yellow]")
-                
-                for step in plan.plan:
-                    console.print(f"[dim]  Step {step.id}: {step.command} (simulated)[/dim]")
-                    execution_result["step_results"].append({
-                        "step_id": step.id,
-                        "status": "simulated",
-                        "output": f"[DRY RUN] Would execute: {step.command}"
-                    })
-                    execution_result["steps_completed"] += 1
-                
-                execution_result["success"] = True
-                return execution_result
-            
-            # Real execution
-            console.print("[green]🔧 Executing plan with tools...[/green]")
-            
-            for step in plan.plan:
-                console.print(f"\n[blue]Step {step.id}:[/blue] {step.explanation}")
-                console.print(f"[dim]Tool: {step.tool} | Command: {step.command}[/dim]")
-                
-                # Get appropriate tool
-                tool = self.tools.get_tool(step.tool)
-                if not tool:
-                    tool = self.tools.suggest_tool_for_command(step.command)
-                
-                if not tool or not tool.is_available:
-                    error_msg = f"Tool '{step.tool}' not available"
-                    execution_result["step_results"].append({
-                        "step_id": step.id,
-                        "status": "failed",
-                        "error": error_msg
-                    })
-                    execution_result["error"] = error_msg
-                    break
-                
-                # Execute the step
-                try:
-                    with console.status(f"[green]Executing step {step.id}..."):
-                        tool_result = tool.execute(step.command)
-                    
-                    # Display result
-                    if tool_result.success:
-                        console.print(f"[green]✓[/green] {tool_result.output}")
-                    else:
-                        console.print(f"[red]✗[/red] {tool_result.error}")
-                    
-                    # Store result
-                    execution_result["step_results"].append({
-                        "step_id": step.id,
-                        "status": "success" if tool_result.success else "failed",
-                        "output": tool_result.output,
-                        "error": tool_result.error,
-                        "execution_time": tool_result.execution_time
-                    })
-                    
-                    if tool_result.success:
-                        execution_result["steps_completed"] += 1
-                    else:
-                        execution_result["error"] = f"Step {step.id} failed: {tool_result.error}"
-                        break
-                        
-                except Exception as e:
-                    error_msg = f"Step {step.id} execution error: {str(e)}"
-                    execution_result["step_results"].append({
-                        "step_id": step.id,
-                        "status": "error",
-                        "error": error_msg
-                    })
-                    execution_result["error"] = error_msg
-                    break
-            
-            # Determine overall success
-            execution_result["success"] = (
-                execution_result["steps_completed"] == execution_result["total_steps"]
-                and execution_result["error"] is None
-            )
-            
-        except Exception as e:
-            execution_result["error"] = f"Execution engine error: {str(e)}"
-            console.print(f"[red]Execution error: {e}[/red]")
-        
-        return execution_result
-    
-    def _get_recent_context(self) -> str:
-        """Get context from memory and recent interactions."""
-        # Try to get context from Asterix memory first
-        if self.memory and self.memory.is_available:
-            return self.memory.get_relevant_context()
-        
-        # Fallback to session history
-        if not self.session_history:
-            return "No previous interactions"
-        
-        recent = self.session_history[-3:]  # Last 3 interactions
-        context_parts = []
-        
-        for interaction in recent:
-            status = "completed" if interaction.get("success") else "failed"
-            context_parts.append(f"- {interaction['user_input']}: {status}")
-        
-        return "Recent actions:\n" + "\n".join(context_parts)
-    
-    def _add_to_history(self, result: Dict[str, Any]) -> None:
-        """Add interaction to session history and memory."""
-        # Store in Asterix memory
-        if self.memory and self.memory.is_available:
-            self.memory.store_interaction(result["user_input"], result)
-        
-        # Also keep session history
-        self.session_history.append({
+_audit_path = settings.data_dir / "logs" / "audit.jsonl"
+_audit_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _audit_log(tool_name: str, arguments: dict) -> None:
+    """Append tool call to JSONL audit trail."""
+    try:
+        entry = {
             "timestamp": datetime.now().isoformat(),
-            "user_input": result["user_input"],
-            "success": result["success"],
-            "stage": result["stage"]
-        })
-        
-        # Keep only recent history (last 10 interactions)
-        if len(self.session_history) > 10:
-            self.session_history = self.session_history[-10:]
-    
-    def _log_interaction(self, result: Dict[str, Any]) -> None:
-        """Log interaction to audit trail."""
-        try:
-            # Create simple audit entry
-            audit_entry = {
-                "timestamp": datetime.now().isoformat(),
-                "user_input": result["user_input"],
-                "stage": result["stage"],
-                "success": result["success"],
-                "error": result.get("error")
-            }
-            
-            # Add plan summary if available
-            if result.get("plan"):
-                audit_entry["plan_summary"] = {
-                    "total_steps": len(result["plan"].plan),
-                    "risk_level": result["plan"].risk_level
-                }
-            
-            # Add execution summary if available
-            if result.get("execution_result"):
-                audit_entry["execution_summary"] = {
-                    "steps_completed": result["execution_result"]["steps_completed"],
-                    "total_steps": result["execution_result"]["total_steps"]
-                }
-            
-            # Write to audit log
-            with open(self.audit_log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(audit_entry) + "\n")
-                
-        except Exception as e:
-            console.print(f"[red]Warning: Failed to write audit log: {e}[/red]")
-    
-    def test_all_components(self) -> Dict[str, Any]:
-        """Test all agent components."""
-        test_results = {}
-        
-        # Test LLM Planner
-        try:
-            console.print("Testing LLM Planner...")
-            planner_test = self.planner.test_connection()
-            test_results["planner"] = {
-                "status": "success" if planner_test["status"] == "success" else "error",
-                "details": planner_test
-            }
-            console.print(f"[green]✓[/green] Planner: {planner_test['status']}")
-        except Exception as e:
-            test_results["planner"] = {"status": "error", "details": {"error": str(e)}}
-            console.print(f"[red]✗[/red] Planner: {e}")
-        
-        # Test Tools
-        try:
-            console.print("Testing Available Tools...")
-            available_tools = self.tools.get_available_tools()
-            test_results["tools"] = {
-                "status": "success" if available_tools else "error",
-                "details": {"count": len(available_tools)}
-            }
-            console.print(f"[green]✓[/green] Tools: {len(available_tools)} available")
-            for tool in available_tools:
-                console.print(f"  • {tool.name}: {tool.description}")
-        except Exception as e:
-            test_results["tools"] = {"status": "error", "details": {"error": str(e)}}
-            console.print(f"[red]✗[/red] Tools: {e}")
-        
-        # Test Configuration
-        try:
-            console.print("Testing Configuration...")
-            test_results["configuration"] = {
-                "status": "success",
-                "details": {
-                    "active_provider": settings.llm_config.active_provider,
-                    "safe_mode": settings.safe_mode,
-                    "dry_run": settings.dry_run_mode
-                }
-            }
-            console.print("[green]✓[/green] Configuration: Valid")
-        except Exception as e:
-            test_results["configuration"] = {"status": "error", "details": {"error": str(e)}}
-            console.print(f"[red]✗[/red] Configuration: {e}")
-        
-        # Overall status
-        all_success = all(
-            result["status"] == "success" 
-            for result in test_results.values()
-        )
-        
-        test_results["overall"] = {
-            "status": "success" if all_success else "error",
-            "ready": all_success
+            "tool": tool_name,
+            "arguments": {k: str(v)[:200] for k, v in arguments.items()},
         }
-        
-        if all_success:
-            console.print("\n[bold green]🎉 All components ready! OSCAR is fully operational.[/bold green]")
-        else:
-            console.print("\n[bold red]⚠️  Some components failed. Please check configuration.[/bold red]")
-        
-        return test_results
+        with open(_audit_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
 
 
-def create_agent() -> OSCARAgent:
-    """Create and return a new OSCAR agent instance."""
-    return OSCARAgent()
+# ---------------------------------------------------------------------------
+# Step progress tracking (consumed by FastAPI streaming)
+# ---------------------------------------------------------------------------
+
+_last_step: Dict[str, Any] = {}
+
+
+def _on_step(step_info: dict) -> None:
+    """Store latest heartbeat step info."""
+    global _last_step
+    _last_step = step_info
+
+
+def get_last_step() -> Dict[str, Any]:
+    """Return the most recent step info (for API streaming)."""
+    return _last_step
+
+
+# ---------------------------------------------------------------------------
+# Monkey-patch Asterix Agent to support custom system prompt + callbacks
+# ---------------------------------------------------------------------------
+
+def _patch_agent(agent: Agent, system_prompt: str) -> None:
+    """Patch an Asterix v0.2.1 Agent with OSCAR-specific features.
+
+    Asterix v0.2.1 has Gemini support but doesn't yet have constructor
+    params for system_prompt, on_before_tool_call, on_after_tool_call,
+    or on_step. We set these up by patching instance methods.
+    """
+
+    # --- Custom system prompt ------------------------------------------------
+    original_build = agent._build_system_prompt
+
+    def patched_build_system_prompt() -> str:
+        """Replace generic prompt with OSCAR's GitHub-focused prompt."""
+        # Start with our custom prompt
+        lines = [system_prompt, ""]
+
+        # Append memory blocks (reuse original logic for block formatting)
+        lines.append("# Memory Blocks")
+        for block_name, block in agent.blocks.items():
+            lines.append(f"## {block_name}")
+            if block.config.description:
+                lines.append(f"*{block.config.description}*")
+            lines.append("```")
+            lines.append(block.content if block.content else "(empty)")
+            lines.append("```")
+            lines.append("")
+
+        # Tool usage instructions
+        lines.extend([
+            "# Tool Calling",
+            "You have access to function calling tools. When a tool is relevant:",
+            "- **Call the tool using function calling** — do not just describe what it would return.",
+            "- Use memory tools to persist important information across sessions.",
+            "",
+        ])
+        return "\n".join(lines)
+
+    agent._build_system_prompt = patched_build_system_prompt
+
+    # --- on_before_tool_call (safety confirmation) ---------------------------
+    original_execute = agent._execute_tool_calls
+
+    def patched_execute_tool_calls(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Wrap tool execution with safety check and audit logging."""
+        results = []
+        for tc in tool_calls:
+            tool_id = tc["id"]
+            tool_name = tc["name"]
+
+            try:
+                arguments = json.loads(tc["arguments"])
+            except (json.JSONDecodeError, TypeError):
+                arguments = {}
+
+            # Safety gate
+            approved = on_before_tool_call(tool_name, arguments)
+            if not approved:
+                console.print(f"[yellow]  Rejected: {tool_name}[/yellow]")
+                results.append({
+                    "tool_call_id": tool_id,
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": "Tool execution was rejected by user.",
+                })
+                _audit_log(tool_name, {"_status": "rejected", **arguments})
+                continue
+
+            # Execute via original registry
+            try:
+                tool_result = agent._tool_registry.execute_tool(tool_name, **arguments)
+                console.print(f"[green]  Done: {tool_name}[/green]")
+
+                results.append({
+                    "tool_call_id": tool_id,
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": str(tool_result),
+                })
+            except Exception as e:
+                console.print(f"[red]  Error: {tool_name} — {e}[/red]")
+                results.append({
+                    "tool_call_id": tool_id,
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": f"Error: {e}",
+                })
+
+            # Audit log
+            _audit_log(tool_name, arguments)
+
+        return results
+
+    agent._execute_tool_calls = patched_execute_tool_calls
+
+
+# ---------------------------------------------------------------------------
+# Agent singleton
+# ---------------------------------------------------------------------------
+
+_agent_instance = None
+
+
+def _create_agent() -> Agent:
+    """Create and configure the OSCAR Asterix agent."""
+    prompt = SYSTEM_PROMPT.format(
+        os_info=platform.platform(),
+        working_directory=str(Path.cwd()),
+    )
+
+    agent = Agent(
+        agent_id="oscar",
+        model="gemini/gemini-2.5-flash",
+        blocks={
+            "session_context": BlockConfig(
+                size=4000, priority=1,
+                description="Recent interactions and task context",
+            ),
+            "knowledge_base": BlockConfig(
+                size=3000, priority=2,
+                description="Facts and information from searches",
+            ),
+            "user_preferences": BlockConfig(
+                size=1000, priority=3,
+                description="Learned user preferences and patterns",
+            ),
+        },
+        max_tokens=4096,
+    )
+
+    # Patch in OSCAR features (system prompt, safety, audit)
+    _patch_agent(agent, prompt)
+
+    # -- Register git tools ---------------------------------------------------
+    agent.tool(name="git_status", description="Show repository status, current branch, and working tree state")(git_status)
+    agent.tool(name="git_compare", description="Compare two branches: commit count, changed files, diff summary, and commit log")(git_compare)
+    agent.tool(name="git_review", description="Full diff of a branch for code review, with diffstat summary")(git_review)
+    agent.tool(name="git_log", description="Show formatted commit history for a branch")(git_log)
+    agent.tool(name="git_diff", description="Show diff for a specific file")(git_diff)
+    agent.tool(name="git_branches", description="List all local and remote branches")(git_branches)
+    agent.tool(name="git_checkout", description="Switch to a different branch")(git_checkout)
+    agent.tool(name="git_commit", description="Commit staged changes with a message")(git_commit)
+    agent.tool(name="git_push", description="Push commits to a remote repository")(git_push)
+
+    # -- Register shell tool --------------------------------------------------
+    agent.tool(name="run_shell_command", description="Execute a shell command with safety validation and cross-platform support")(run_shell_command)
+
+    # -- Register web search tool ---------------------------------------------
+    agent.tool(name="web_search", description="Search the web for documentation, errors, or external information")(web_search)
+
+    # -- Register browser tools -----------------------------------------------
+    agent.tool(name="browser_navigate", description="Navigate to a URL and return page content")(browser_navigate)
+    agent.tool(name="browser_search", description="Perform a Google search via browser and return results")(browser_search)
+    agent.tool(name="browser_extract", description="Extract content from the currently loaded page")(browser_extract)
+    agent.tool(name="browser_download", description="Download a file from a URL")(browser_download)
+
+    tool_count = len(agent.get_all_tools())
+    console.print(f"[dim]OSCAR agent initialized — {tool_count} tools (Asterix + Gemini 2.5 Flash via Vertex AI)[/dim]")
+    return agent
+
+
+def get_agent() -> Agent:
+    """Return the singleton OSCAR agent, creating it on first call."""
+    global _agent_instance
+    if _agent_instance is None:
+        _agent_instance = _create_agent()
+    return _agent_instance

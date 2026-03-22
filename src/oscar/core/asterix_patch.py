@@ -10,6 +10,7 @@ file can be deleted.
 """
 
 import json
+import os
 import time
 import logging
 from typing import List, Optional, Any, Dict, Union
@@ -28,9 +29,9 @@ logger = logging.getLogger(__name__)
 
 _patched = False
 
-# Vertex AI project config
-_VERTEX_PROJECT = "oscar-490517"
-_VERTEX_LOCATION = "us-central1"
+# Vertex AI project config — reads from env, falls back to defaults
+_VERTEX_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("VERTEX_PROJECT", "oscar-490517"))
+_VERTEX_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", os.getenv("VERTEX_LOCATION", "us-central1"))
 _GEMINI_MODEL = "gemini-2.5-flash"
 
 
@@ -451,6 +452,24 @@ def apply_patches():
         return metrics
 
     LLMProviderManager.get_performance_metrics = patched_get_performance_metrics
+
+    # ------------------------------------------------------------------
+    # 8. Patch the existing global singleton instance
+    # ------------------------------------------------------------------
+    # The global `llm_manager` was already instantiated at import time
+    # before our class patches took effect. We need to add the gemini
+    # attributes directly on the existing instance.
+    from asterix.core.llm_manager import llm_manager as _singleton
+
+    if not hasattr(_singleton, "_gemini_client"):
+        _singleton._gemini_client = None
+    for attr, default in [
+        ("_operation_count", 0), ("_total_processing_time", 0.0),
+        ("_total_tokens", 0), ("_error_count", 0), ("_provider_failures", 0),
+    ]:
+        d = getattr(_singleton, attr, {})
+        if "gemini" not in d:
+            d["gemini"] = default
 
     _patched = True
     logger.info("Asterix patched for Gemini/Vertex AI support (project: %s)", _VERTEX_PROJECT)
