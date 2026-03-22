@@ -25,3 +25,4 @@ vscode-oscar/out/
 vscode-oscar/.vscode/
 vscode-oscar/.agent/
 vscode-oscar/.agent-cache/
+*.vsix

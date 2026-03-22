@@ -3,7 +3,7 @@
   "displayName": "OSCAR - GitHub Coding Assistant",
   "description": "AI-powered GitHub-specialized coding assistant",
   "version": "0.1.0",
-  "publisher": "aditya-sarade",
+  "publisher": "adityasarade",
   "engines": {
     "vscode": "^1.85.0"
   },
