@@ -28,7 +28,13 @@
       "Bash(grep -E 'agent_states|\\\\.env$|data/logs|asterix-changes|\\\\.DS_Store|out/')",
       "Bash(grep '\\\\.env$')",
       "Bash(uv run:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(uv sync:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx:*)"
     ]
   }
 }
