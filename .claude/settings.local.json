@@ -13,7 +13,17 @@
       "WebFetch(domain:pypi.org)",
       "Bash(find /Users/aditya.sarade/Desktop/OSCAR/.venv/lib/python3.11/site-packages/asterix* -type f -name \"*.txt\" -o -name \"*.md\" -o -name \"setup.py\" -o -name \"pyproject.toml\")",
       "mcp__claude_ai_Context7__resolve-library-id",
-      "Bash(uv pip:*)"
+      "Bash(uv pip:*)",
+      "Bash(find /Users/aditya.sarade/Desktop/OSCAR -path *api/server.py -o -path *api/*.py)",
+      "Bash(find /Users/aditya.sarade/Desktop/OSCAR/src/ -type f -name *.py)",
+      "Bash(find /Users/aditya.sarade/Desktop/OSCAR -type f -name server.py -o -name *server*)",
+      "Bash(grep -r \"FastAPI\\\\|@app\\\\|uvicorn\" /Users/aditya.sarade/Desktop/OSCAR --include=*.py)",
+      "Bash(npm --version)",
+      "Bash(.venv/bin/python -c \"from oscar.config.prompts import SYSTEM_PROMPT; print\\('prompts.py OK —', SYSTEM_PROMPT[:80]\\)\")",
+      "Bash(npm install:*)",
+      "Bash(.venv/bin/python -c \"from oscar.core.safety import on_before_tool_call; print\\('safety.py OK — low risk auto-approve:', on_before_tool_call\\('git_status', {}\\)\\)\")",
+      "Bash(.venv/bin/python -c \"from oscar.core.asterix_patch import apply_patches; print\\('asterix_patch.py OK — patches applied'\\)\")",
+      "Bash(npm run:*)"
     ]
   }
 }

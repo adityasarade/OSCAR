@@ -1,0 +1,55 @@
+{
+  "name": "oscar-assistant",
+  "displayName": "OSCAR - GitHub Coding Assistant",
+  "description": "AI-powered GitHub-specialized coding assistant",
+  "version": "0.1.0",
+  "publisher": "aditya-sarade",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "oscar-sidebar-container",
+          "title": "OSCAR",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "oscar-sidebar-container": [
+        {
+          "type": "webview",
+          "id": "oscarSidebar",
+          "name": "OSCAR Chat"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OSCAR",
+      "properties": {
+        "oscar.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8420",
+          "description": "URL of the OSCAR backend server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
