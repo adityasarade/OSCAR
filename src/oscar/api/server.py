@@ -89,7 +89,7 @@ async def health():
         git_ok = False
 
     return {
-        "status": "healthy",
+        "status": "ok",
         "agent_ready": _agent is not None,
         "git_available": git_ok,
     }
@@ -97,13 +97,62 @@ async def health():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
     if _agent is None:
         raise HTTPException(503, "Agent not initialized")
     try:
-        response = _agent.chat(req.message)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            ThreadPoolExecutor(max_workers=1), _agent.chat, req.message
+        )
         return ChatResponse(response=response)
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """SSE streaming endpoint — sends step-by-step progress events."""
+    import asyncio
+    import json as _json
+    from concurrent.futures import ThreadPoolExecutor
+    from fastapi.responses import StreamingResponse
+    from oscar.core.agent import get_last_step
+
+    if _agent is None:
+        raise HTTPException(503, "Agent not initialized")
+
+    _executor = ThreadPoolExecutor(max_workers=1)
+    _result = {"done": False, "response": "", "error": None}
+
+    def _run_chat():
+        try:
+            _result["response"] = _agent.chat(req.message)
+        except Exception as e:
+            _result["error"] = str(e)
+        finally:
+            _result["done"] = True
+
+    async def _event_generator():
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(_executor, _run_chat)
+
+        last_sent = {}
+        while not _result["done"]:
+            step = get_last_step()
+            if step and step != last_sent:
+                last_sent = step.copy()
+                yield f"data: {_json.dumps({'type': 'step', 'data': step})}\n\n"
+            await asyncio.sleep(0.3)
+
+        if _result["error"]:
+            yield f"data: {_json.dumps({'type': 'error', 'message': _result['error']})}\n\n"
+        else:
+            yield f"data: {_json.dumps({'type': 'done', 'response': _result['response']})}\n\n"
+
+    return StreamingResponse(_event_generator(), media_type="text/event-stream")
 
 
 @app.get("/history")

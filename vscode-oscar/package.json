@@ -8,8 +8,25 @@
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
     "Other"
   ],
+  "license": "MIT",
+  "keywords": [
+    "github",
+    "ai",
+    "coding-assistant",
+    "git",
+    "code-review"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adityasarade/OSCAR"
+  },
+  "bugs": {
+    "url": "https://github.com/adityasarade/OSCAR/issues"
+  },
+  "homepage": "https://github.com/adityasarade/OSCAR",
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
