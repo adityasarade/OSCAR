@@ -2,7 +2,7 @@
 
 ## Vision
 
-OSCAR is a GitHub-specialized AI coding assistant that lives inside VS Code as a sidebar extension. Users interact with it via natural language to compare branches, review PRs, run commands, and automate git workflows. It uses Asterix (our own agentic framework) as its core orchestrator with Gemini 2.5 Flash as the primary LLM. All dangerous operations require human approval before execution.
+OSCAR is a GitHub-specialized AI coding assistant that lives inside VS Code as a sidebar extension. Users interact with it via natural language to compare branches, review PRs, run commands, and automate git workflows. It uses Asterix (our own agentic framework) as its core orchestrator with Gemini 2.5 Flash via Vertex AI as the LLM. All dangerous operations require human approval before execution.
 
 **Key deliverables:**
 - VS Code Marketplace extension with sidebar UI
@@ -14,403 +14,383 @@ OSCAR is a GitHub-specialized AI coding assistant that lives inside VS Code as a
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│ VS Code Extension (TypeScript)                       │
+│  ├── Sidebar WebviewViewProvider (chat UI)            │
+│  ├── Branch comparison widget                        │
+│  └── HTTP/SSE client → FastAPI backend               │
+├─────────────────────────────────────────────────────┤
+│ FastAPI Server (Python)                              │
+│  ├── /chat, /branches, /compare, /review, /history   │
+│  └── SSE streaming for real-time progress            │
+├─────────────────────────────────────────────────────┤
+│ OSCAR Agent Layer (Python)                           │
+│  ├── Asterix Agent (ReAct loop, memory, state)       │
+│  ├── asterix_patch.py (Vertex AI Gemini integration) │
+│  ├── Safety callbacks (on_before_tool_call)           │
+│  └── Audit logging (on_after_tool_call)              │
+├─────────────────────────────────────────────────────┤
+│ Tools (registered via @agent.tool())                 │
+│  ├── git_* (status, compare, review, log, diff, ...) │
+│  ├── shell (subprocess with safety checks)           │
+│  ├── web_search (Tavily with dual-key fallback)      │
+│  └── browser (Playwright: navigate, extract, click)  │
+├─────────────────────────────────────────────────────┤
+│ LLM: Gemini 2.5 Flash via Vertex AI (ADC auth)      │
+│  Project: oscar-490517 | Region: us-central1         │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## LLM Configuration
+
+- **Provider:** Vertex AI (NOT Gemini API, NOT Groq)
+- **Model:** `gemini-2.5-flash`
+- **Auth:** Application Default Credentials (gcloud auth already configured)
+- **Project:** `oscar-490517`
+- **Location:** `us-central1`
+- **Client init:** `Client(vertexai=True, project="oscar-490517", location="us-central1")`
+- Asterix v0.2.0 is published with Gemini support. Vertex AI client initialization is being added in a parallel Asterix update. Until then, OSCAR patches Asterix at runtime via `src/oscar/core/asterix_patch.py`.
+
+---
+
 ## What's Already Done
 
-- [x] Asterix v0.2.0 published with Gemini support, custom system prompts, execution hooks, step callbacks, history API
-- [x] Fixed Gemini client in planner.py (Task 1 from old plan — will be replaced by Asterix integration)
+- [x] Asterix v0.2.0 published with custom system prompts, execution hooks (on_before/after_tool_call), step callbacks (on_step), history API (get_history)
+- [x] Asterix Gemini provider being updated for Vertex AI auth (parallel work in Asterix repo)
 - [x] Deleted file_ops.py (redundant with ShellTool)
-- [x] Kept browser.py (unique capabilities: navigate, click, extract, download — Tavily alternative)
-- [x] Updated planner.py available_tools and prompt tool options
+- [x] Kept browser.py (unique capabilities: navigate, click, extract, download)
+- [x] Verified Vertex AI + Gemini 2.5 Flash + Asterix tool calling works end-to-end via OSCAR-side patches
+- [x] gcloud ADC auth configured for project oscar-490517
 
 ---
 
 ## PHASE 1: Core Backend — Rewrite OSCAR on Asterix
 
-### Task 1 — Rewrite `agent.py` to use Asterix `Agent` as core orchestrator
+### Task 1 — Create `asterix_patch.py` (Vertex AI + Gemini bridge)
 
-**What:** Replace the current custom `OSCARAgent` class (which manually calls planner → safety → confirm → execute) with an Asterix `Agent` instance. The Asterix agent handles the ReAct loop, tool routing via LLM function calling, memory management, and state persistence automatically.
+**What:** A module that patches Asterix v0.2.0 at runtime to support Gemini via Vertex AI. This module must be imported before creating any Asterix Agent. Once Asterix is updated natively with Vertex AI support, this file can be removed.
 
 **Details:**
-- Create the Asterix agent with `model="gemini/gemini-2.5-flash"` and a GitHub-specialized `system_prompt`
-- Define memory blocks: `session_context`, `knowledge_base`, `user_preferences` (matching current adapter)
-- Wire `on_before_tool_call` to OSCAR's safety scanner for human-in-the-loop confirmation
-- Wire `on_after_tool_call` to audit logging (JSONL)
-- Wire `on_step` for progress tracking (used later by the API for streaming)
-- Export a `get_agent()` singleton for CLI and API to share
-- Keep the existing audit log path (`data/logs/audit.jsonl`)
+- Patch `LLMConfig.__post_init__` to allow `"gemini"` provider
+- Add `_call_gemini()` to `LLMProviderManager` with Vertex AI client (`Client(vertexai=True, project="oscar-490517", location="us-central1")`)
+- Handle message format translation (OpenAI → Gemini Contents)
+- Handle tool schema translation (OpenAI function format → Gemini FunctionDeclaration)
+- Handle response translation (Gemini → OpenAI-compatible raw_response for agent.py)
+- Add "gemini" to all tracking dicts
+- Patch `complete()` to route to `_call_gemini()`
+- This code has been tested and verified working
 
-**Files:** `src/oscar/core/agent.py` (rewrite), `src/oscar/core/safety.py` (adapt for callback pattern)
+**Files:** `src/oscar/core/asterix_patch.py` (new)
+
+**Depends on:** Nothing — can be done immediately
 
 ---
 
-### Task 2 — Register tools via `@agent.tool()`
+### Task 2 — Rewrite `agent.py` to use Asterix Agent as core orchestrator
 
-**What:** Convert existing OSCAR tools (shell, web_search, browser) and create new ones (git) as Asterix `@agent.tool()` decorated functions. This replaces the custom `BaseTool`/`ToolRegistry` system with Asterix's native tool routing via LLM function calling — no more hardcoded keyword matching.
+**What:** Replace the current custom `OSCARAgent` class with an Asterix `Agent` instance. Import `asterix_patch` first to enable Gemini/Vertex AI.
 
 **Details:**
-- **Shell tool**: Register function wrapping `subprocess.run()` with safety validation. Parameters: `command: str`, optional `cwd: str`, optional `timeout: int`. Include the safe command allowlist and dangerous pattern checks from current `ShellTool`.
-- **Git tool**: New. Register functions for each git operation (see Task 3).
-- **Web search tool**: Register function wrapping existing Tavily search with dual-key fallback.
-- **Browser tool**: Register function wrapping existing Playwright capabilities (navigate, search, extract, download).
-- Each tool function should have clear type hints and docstrings — Asterix auto-generates LLM function calling schemas from these.
+- Import `asterix_patch` at top of module (enables Gemini before agent creation)
+- Create agent with `Agent(agent_id="oscar", model="gemini/gemini-2.5-flash", system_prompt=SYSTEM_PROMPT, blocks={...})`
+- Memory blocks: `session_context` (4000, priority 1), `knowledge_base` (3000, priority 2), `user_preferences` (1000, priority 3)
+- Wire `on_before_tool_call` → safety callback (auto-approve low risk, prompt for medium+)
+- Wire `on_after_tool_call` → audit log (JSONL at `data/logs/audit.jsonl`)
+- Wire `on_step` → progress tracking (stored for API streaming)
+- Export `get_agent()` singleton
+- The main interaction is `agent.chat(user_input)` — Asterix handles the entire ReAct loop
 
-**Files:** `src/oscar/tools/` (refactor all tools as `@agent.tool()` functions)
+**Files:** `src/oscar/core/agent.py` (rewrite)
+
+**Depends on:** Task 1
 
 ---
 
 ### Task 3 — Create Git tool functions
 
-**What:** GitHub-specialized git operations registered as `@agent.tool()` functions. This is the core differentiator of OSCAR.
+**What:** GitHub-specialized git operations as `@agent.tool()` functions. Core differentiator of OSCAR.
 
-**Functions to register:**
-- `git_status()` — returns repo status, current branch, repo root
-- `git_compare(base: str, head: str)` — compare two branches: commit count, changed files, diff summary, commit log between them
-- `git_review(branch: str, base: str = "main")` — full diff for code review (truncated at 50K chars for LLM context), diffstat summary
-- `git_log(branch: str = "HEAD", count: int = 10)` — formatted commit history with hash, author, date, message
+**Functions:**
+- `git_status()` — repo status, current branch, repo root
+- `git_compare(base: str, head: str)` — compare branches: commit count, changed files, diff summary, commit log
+- `git_review(branch: str, base: str = "main")` — full diff for code review (truncated at 50K chars), diffstat
+- `git_log(branch: str = "HEAD", count: int = 10)` — formatted commit history
 - `git_diff(file_path: str, staged: bool = False)` — file-level diff
-- `git_branches()` — list all local and remote branches
-- `git_checkout(branch: str)` — switch branches (medium risk — needs confirmation)
+- `git_branches()` — list local and remote branches
+- `git_checkout(branch: str)` — switch branches (medium risk)
 - `git_commit(message: str)` — commit staged changes (medium risk)
-- `git_push(remote: str = "origin", branch: str = "")` — push to remote (high risk — needs confirmation)
+- `git_push(remote: str = "origin", branch: str = "")` — push to remote (high risk)
 
-All functions use `subprocess.run(["git", ...], capture_output=True, text=True)`. The compare and review functions are the most valuable for the demo — they produce structured output that the LLM can summarize intelligently.
+All use `subprocess.run(["git", ...], capture_output=True, text=True)`. Each function has clear type hints and docstrings for Asterix schema auto-generation.
 
 **Files:** `src/oscar/tools/git_tool.py` (new)
 
+**Depends on:** Nothing — pure functions, no agent dependency. Tools are registered in Task 2.
+
 ---
 
-### Task 4 — Write GitHub-specialized system prompt
+### Task 4 — Convert shell tool to `@agent.tool()` function
 
-**What:** Create the system prompt that makes OSCAR a GitHub expert. This is passed as `system_prompt=` to the Asterix Agent constructor.
+**What:** Convert existing `ShellTool` class into a simple `@agent.tool()` function. Keep the safety validation (safe command allowlist, dangerous pattern regex checks), cross-platform command translation, and timeout handling.
 
-**Content should include:**
-- Identity: "You are OSCAR, an AI-powered GitHub coding assistant"
+**Function:** `run_shell_command(command: str, cwd: str = "", timeout: int = 30) -> str`
+
+**Files:** `src/oscar/tools/shell.py` (refactor from class to function)
+
+**Depends on:** Nothing — pure function.
+
+---
+
+### Task 5 — Convert web_search tool to `@agent.tool()` function
+
+**What:** Convert existing `WebSearchTool` class into an `@agent.tool()` function. Keep Tavily dual-key fallback.
+
+**Function:** `web_search(query: str) -> str`
+
+**Files:** `src/oscar/tools/web_search.py` (refactor from class to function)
+
+**Depends on:** Nothing — pure function.
+
+---
+
+### Task 6 — Convert browser tool to `@agent.tool()` functions
+
+**What:** Convert existing `BrowserTool` class into `@agent.tool()` functions. Keep Playwright capabilities.
+
+**Functions:**
+- `browser_navigate(url: str) -> str`
+- `browser_search(query: str) -> str`
+- `browser_extract(query: str) -> str`
+- `browser_download(url: str) -> str`
+
+**Files:** `src/oscar/tools/browser.py` (refactor from class to functions)
+
+**Depends on:** Nothing — pure functions.
+
+---
+
+### Task 7 — Write GitHub-specialized system prompt
+
+**What:** Create the system prompt that makes OSCAR a GitHub expert.
+
+**Content:**
+- Identity: "You are OSCAR, an AI-powered GitHub coding assistant built on the Asterix framework"
 - Specialization: branch comparison, PR review, diff analysis, git workflow automation
-- Available tools and when to use each (shell for commands, git for repo operations, web_search for docs/Stack Overflow, browser for web pages)
-- Git tool usage examples (compare, review, log, diff, branches)
-- Safety rules: always use `request_confirmation` or rely on the on_before_tool_call hook for destructive operations
-- Output format preferences: structured, concise, technical
-- Context: current OS, working directory
+- Available tools and when to use each
+- Git tool usage examples
+- Safety: destructive operations (push, reset, delete) will be confirmed by the user via a safety system
+- Output: structured, concise, technical, use markdown for diffs/code
+- Context: current OS, working directory injected dynamically
 
-**Files:** `src/oscar/config/llm_config.yaml` (rewrite) or inline in agent.py
+**Files:** `src/oscar/config/prompts.py` (new) or inline in `agent.py`
+
+**Depends on:** Nothing — just text.
 
 ---
 
-### Task 5 — Adapt safety system for callback pattern
+### Task 8 — Adapt safety system for callback pattern
 
-**What:** The current `safety.py` has a `SafetyScanner` that displays Rich tables and prompts for confirmation. This needs to be adapted into an `on_before_tool_call` callback function that:
-1. Checks the tool name and arguments against safety patterns
-2. Assesses risk level (low/medium/high/dangerous)
-3. For low risk: auto-approve (return True)
-4. For medium/high: prompt user with Rich confirmation (return True/False)
-5. For dangerous: require typed "CONFIRM" (return True/False)
+**What:** Refactor `safety.py` into an `on_before_tool_call` callback function.
 
-The existing regex patterns in `SAFETY_PATTERNS` and the risk assessment logic can be reused. The Rich display needs to be simpler since it's now per-tool-call, not per-plan.
+**Logic:**
+1. Check tool name + arguments against `SAFETY_PATTERNS` regex
+2. Assess risk: low / medium / high / dangerous
+3. Low risk → auto-approve (return True)
+4. Medium/high → Rich prompt confirmation (return True/False)
+5. Dangerous → require typed "CONFIRM" (return True/False)
+
+Reuse existing `SAFETY_PATTERNS` from `settings.py`.
 
 **Files:** `src/oscar/core/safety.py` (refactor)
 
+**Depends on:** Nothing — pure function.
+
 ---
 
-### Task 6 — Update CLI for Asterix-based agent
+### Task 9 — Update CLI for Asterix-based agent
 
-**What:** Rewrite `main.py` to use the Asterix-based agent. The main change: instead of calling `agent.process_request()` (which internally did plan → confirm → execute), now just call `agent.chat(user_input)`. Asterix handles the entire ReAct loop, tool calling, and confirmation via callbacks.
+**What:** Rewrite `main.py` to use the new agent.
 
-**Details:**
-- `get_agent()` singleton returns the Asterix-based agent
-- `process_user_request(input)` becomes `agent.chat(input)` — much simpler
-- `test_llm_connection()` uses `agent.chat("Hello, respond with OK")`
-- `test_agent_components()` checks agent status, tool count, memory blocks
-- `display_help()` updated for GitHub-focused usage examples
-- `display_welcome()` updated branding
+**Changes:**
+- `get_agent()` returns the Asterix-based singleton from `agent.py`
+- `process_user_request()` → just `agent.chat(user_input)` and print the response
+- `test_llm_connection()` → `agent.chat("Hello, respond with OK")`
+- `display_help()` → GitHub-focused examples
+- `display_welcome()` → updated branding
+- Add `serve` command to start FastAPI server
 
 **Files:** `src/oscar/cli/main.py` (rewrite)
 
+**Depends on:** Tasks 1, 2 (needs working agent)
+
 ---
 
-### Task 7 — Update dependencies and config
+### Task 10 — Update dependencies and cleanup
 
-**What:** Clean up pyproject.toml and config files for the new architecture.
+**What:** Clean up pyproject.toml, remove obsolete files, update config.
 
-**pyproject.toml changes:**
-- Version: `0.3.0`
-- Description: `"OSCAR - GitHub-Specialized AI Coding Assistant"`
-- Remove: `playwright>=1.40.0` (if browser tool is also converted, otherwise keep)
+**pyproject.toml:**
+- Version → `0.3.0`
+- Description → GitHub-focused
 - Add: `fastapi>=0.115.0`, `uvicorn[standard]>=0.34.0`
 - Ensure: `asterix-agent>=0.2.0`, `google-genai>=1.0.0`
-- Update keywords: add `github`, `code-review`, `git`, `vscode`
 - Add script: `oscar-server = "oscar.api.server:start_server"`
 
-**llm_config.yaml changes:**
-- `active_provider: gemini`
-- Keep groq as fallback config
-- System prompt can be moved here or kept in agent.py
+**Remove obsolete files:**
+- `src/oscar/core/planner.py` (replaced by Asterix ReAct loop)
+- `src/oscar/tools/base.py` (replaced by @agent.tool())
+- `src/oscar/memory/asterix_adapter.py` (replaced by direct Asterix Agent)
+- `src/oscar/memory/context_manager.py` (empty)
+- `src/oscar/memory/persistence.py` (empty)
 
-**Files:** `pyproject.toml`, `src/oscar/config/llm_config.yaml`
+**Files:** `pyproject.toml`, multiple file deletions
 
----
-
-### Task 8 — Remove/refactor obsolete modules
-
-**What:** With Asterix as the orchestrator, several OSCAR modules become obsolete or need significant simplification.
-
-- `src/oscar/core/planner.py` — **Remove or simplify.** Asterix's agent handles LLM calls and plan generation internally via its ReAct loop. The `LLMPlanner` class, `AgentPlan`/`ActionStep` models, and all the JSON parsing logic are no longer needed. If we still want a "plan mode" (show plan before executing), this could become a lightweight wrapper.
-- `src/oscar/tools/base.py` — **Simplify.** `BaseTool`, `ToolRegistry`, `suggest_tool_for_command()` are all replaced by Asterix's `@agent.tool()` system. Keep only `ToolResult` if any tool functions still use it, or remove entirely.
-- `src/oscar/memory/asterix_adapter.py` — **Remove.** The Asterix `Agent` now handles memory blocks directly. The adapter was a bridge that's no longer needed.
-- `src/oscar/memory/context_manager.py`, `persistence.py` — **Remove.** Already empty files.
-
-**Files:** Multiple files to remove or simplify
+**Depends on:** All other Phase 1 tasks complete
 
 ---
 
 ## PHASE 2: FastAPI Backend
 
-### Task 9 — Create FastAPI server
+### Task 11 — Create FastAPI server
 
-**What:** HTTP API wrapping the Asterix-based agent for the VS Code extension to consume.
+**What:** HTTP API wrapping the Asterix-based agent.
 
 **Endpoints:**
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/health` | Health check — git available, agent ready, repo root |
-| POST | `/chat` | Send natural language query, get response (agent.chat()) |
-| GET | `/history` | Get conversation history (agent.get_history()) |
-| GET | `/branches` | List git branches in workspace |
-| POST | `/compare` | Compare two branches — returns structured diff + LLM summary |
-| POST | `/review` | Review branch changes — returns PR-style commentary |
-| GET | `/memory` | Get current Asterix memory blocks |
-| GET | `/status` | Agent status — tools, memory, conversation stats |
+| GET | `/health` | Health check |
+| POST | `/chat` | Natural language query → agent.chat() |
+| POST | `/chat/stream` | SSE streaming with step-by-step progress |
+| GET | `/history` | Conversation history via agent.get_history() |
+| GET | `/branches` | List git branches |
+| POST | `/compare` | Compare two branches |
+| POST | `/review` | Review branch changes |
+| GET | `/memory` | Current Asterix memory blocks |
+| GET | `/status` | Agent status |
 
-**Design notes:**
-- Agent is a singleton initialized on startup via `lifespan` context manager
-- CORS enabled for VS Code webview origin
-- Pydantic request/response models for all endpoints
-- The `/chat` endpoint is the primary interface — it passes the query to `agent.chat()` and returns the response
-- For the `/chat` endpoint, the `on_before_tool_call` callback should auto-approve low-risk operations (since the extension has its own approval UI — see Phase 3)
-- SSE streaming endpoint (`/chat/stream`) for real-time step updates using the `on_step` callback — returns `text/event-stream` with step-by-step progress
+Agent singleton via `lifespan` context manager. CORS enabled. Pydantic models for all request/response.
 
-**Files:** `src/oscar/api/__init__.py` (new), `src/oscar/api/server.py` (new)
+**Files:** `src/oscar/api/__init__.py`, `src/oscar/api/server.py` (new)
 
----
-
-### Task 10 — Add `serve` command to CLI
-
-**What:** Users should be able to start the API server from the OSCAR CLI.
-
-- Add `oscar-server` script entry point in pyproject.toml
-- Add `serve` command in CLI's main REPL loop
-- Server starts on `127.0.0.1:8420` by default
-
-**Files:** `src/oscar/cli/main.py`, `pyproject.toml`
+**Depends on:** Phase 1 complete (working agent with tools)
 
 ---
 
 ## PHASE 3: VS Code Extension
 
-### Task 11 — Extension scaffold and manifest
+### Task 12 — Extension scaffold + manifest
 
-**What:** Create the VS Code extension project with proper structure.
+**What:** Create `vscode-oscar/` with package.json, tsconfig, launch.json. Register sidebar view container with OSCAR icon in activity bar.
 
-**Directory:** `vscode-oscar/`
+**Files:** `vscode-oscar/package.json`, `vscode-oscar/tsconfig.json`, etc.
 
-**Structure:**
-```
-vscode-oscar/
-├── .vscode/
-│   └── launch.json              # F5 debug launch config
-├── .vscodeignore                # Files to exclude from package
-├── package.json                 # Extension manifest
-├── tsconfig.json                # TypeScript config
-├── src/
-│   ├── extension.ts             # Activation, register sidebar provider
-│   ├── oscarViewProvider.ts     # WebviewViewProvider implementation
-│   └── oscarClient.ts          # HTTP/SSE client to talk to FastAPI
-├── media/
-│   ├── main.js                  # Webview chat UI logic
-│   ├── main.css                 # Webview styles (VS Code theme vars)
-│   └── icon.svg                 # OSCAR icon for activity bar
-└── README.md
-```
-
-**package.json key config:**
-- `contributes.viewsContainers.activitybar` — OSCAR icon in sidebar
-- `contributes.views` — webview sidebar panel
-- `contributes.configuration` — `oscar.serverUrl` setting (default `http://127.0.0.1:8420`)
-- `activationEvents` — activate on view open
-
-**Files:** Entire `vscode-oscar/` directory (new)
+**Depends on:** Nothing — can start immediately.
 
 ---
 
-### Task 12 — WebviewViewProvider (sidebar panel)
+### Task 13 — HTTP/SSE client (TypeScript)
 
-**What:** TypeScript class implementing `vscode.WebviewViewProvider` that renders the OSCAR sidebar.
-
-**Details:**
-- `resolveWebviewView()` sets HTML with embedded JS/CSS
-- Listens for messages from webview via `webview.onDidReceiveMessage`
-- Routes messages to `oscarClient.ts`
-- Sends responses back via `webview.postMessage()`
-
-**Message protocol (webview <-> extension):**
-```
-Webview → Extension:
-  { type: "chat", text: "compare main and dev" }
-  { type: "getBranches" }
-  { type: "compare", base: "main", head: "dev" }
-  { type: "getHistory" }
-
-Extension → Webview:
-  { type: "response", data: { message: "..." } }
-  { type: "branches", data: ["main", "dev", "feature"] }
-  { type: "comparison", data: { summary: "..." } }
-  { type: "history", data: [...] }
-  { type: "step", data: { step: 1, max: 5, tools: ["git_compare"] } }
-  { type: "error", message: "..." }
-```
-
-**Files:** `vscode-oscar/src/oscarViewProvider.ts`
-
----
-
-### Task 13 — HTTP/SSE client
-
-**What:** TypeScript wrapper around `fetch()` for all FastAPI endpoints.
-
-**Methods:**
-- `chat(text: string): Promise<ChatResponse>`
-- `getBranches(): Promise<string[]>`
-- `compare(base: string, head: string): Promise<CompareResponse>`
-- `review(branch: string, base?: string): Promise<ReviewResponse>`
-- `getHistory(limit?: number): Promise<HistoryEntry[]>`
-- `getMemory(): Promise<MemoryBlocks>`
-- `chatStream(text: string, onStep: callback): Promise<void>` — SSE consumer for real-time updates
+**What:** `oscarClient.ts` wrapping fetch() calls to FastAPI endpoints. Includes SSE consumer for `/chat/stream`.
 
 **Files:** `vscode-oscar/src/oscarClient.ts`
 
+**Depends on:** Task 12 (scaffold exists)
+
 ---
 
-### Task 14 — Chat UI (webview frontend)
+### Task 14 — WebviewViewProvider (sidebar)
 
-**What:** Plain HTML/CSS/JS chat interface rendered inside the VS Code sidebar webview.
+**What:** `oscarViewProvider.ts` implementing `vscode.WebviewViewProvider`. Loads webview HTML, handles message passing between webview and extension.
 
-**Layout:**
-```
-┌─────────────────────────┐
-│  OSCAR Assistant        │  Header
-├─────────────────────────┤
-│                         │
-│  [Chat messages area]   │  Scrollable messages
-│                         │
-│  ┌─ Agent Response ───┐ │
-│  │ Here's the diff... │ │
-│  │ (with formatting)  │ │
-│  └────────────────────┘ │
-│                         │
-│  ┌─ Branch Compare ──┐  │
-│  │ Base: [dropdown]   │  │
-│  │ Head: [dropdown]   │  │
-│  │ [Compare]          │  │  Branch comparison widget
-│  └────────────────────┘  │
-│                         │
-│  ┌─ Progress ─────────┐ │
-│  │ Step 2/4: git_log  │ │  Real-time step progress
-│  │ ████████░░ 50%     │ │
-│  └────────────────────┘ │
-│                         │
-├─────────────────────────┤
-│ [Type your query...] [→]│  Input area
-└─────────────────────────┘
-```
+**Files:** `vscode-oscar/src/oscarViewProvider.ts`
 
-**Features:**
-- Messages as div cards (user right-aligned, OSCAR left-aligned)
-- Markdown rendering for agent responses (code blocks, diffs)
-- Branch comparison section with dropdowns populated from `/branches`
-- Real-time step progress during multi-tool operations
-- Loading spinners during API calls
-- Error messages in red
-- Uses VS Code CSS variables (`--vscode-editor-background`, etc.) for native look
+**Depends on:** Task 12
+
+---
+
+### Task 15 — Chat UI (webview frontend)
+
+**What:** Plain HTML/CSS/JS chat interface. Messages area, input box, branch comparison widget, progress indicator. Uses VS Code CSS variables for native theming.
 
 **Files:** `vscode-oscar/media/main.js`, `vscode-oscar/media/main.css`
 
+**Depends on:** Task 12
+
 ---
 
-### Task 15 — Extension activation and registration
+### Task 16 — Extension activation
 
-**What:** Main `extension.ts` that registers the sidebar provider and handles activation.
-
-**Details:**
-- Register `OscarViewProvider` as a `WebviewViewProvider`
-- Read `oscar.serverUrl` from VS Code settings
-- On activation, check if OSCAR server is reachable (GET /health)
-- Show notification if server is not running
+**What:** `extension.ts` that registers the sidebar provider, reads settings, checks server health on activation.
 
 **Files:** `vscode-oscar/src/extension.ts`
 
+**Depends on:** Tasks 14, 15
+
 ---
 
-### Task 16 — Package and publish to VS Code Marketplace
+### Task 17 — Package and publish to VS Code Marketplace
 
-**What:** Package the extension and publish it.
+**What:** `vsce package` to create .vsix, publish or side-load for demo.
 
-**Steps:**
-- Install `@vscode/vsce` for packaging
-- Create a publisher account on VS Code Marketplace (if not already)
-- Add `publisher` field to package.json
-- Add icon, description, categories, tags
-- `vsce package` to create `.vsix` file
-- `vsce publish` to publish (or side-load for demo with `code --install-extension oscar-0.1.0.vsix`)
-
-**Files:** `vscode-oscar/package.json` (metadata), `vscode-oscar/.vscodeignore`
+**Depends on:** All Phase 3 tasks complete + Phase 2 server working
 
 ---
 
 ## PHASE 4: Testing and Demo
 
-### Task 17 — End-to-end testing
+### Task 18 — End-to-end testing
 
-**Test scenarios:**
-1. CLI: `oscar` → type "show git status" → agent calls git_status tool → shows result
-2. CLI: "compare main and dev" → agent calls git_compare → LLM summarizes diff
-3. CLI: "review the changes on feature branch" → agent calls git_review → PR-style commentary
-4. CLI: "run python tests" → agent calls shell tool → on_before_tool_call asks for confirmation → executes
-5. CLI: "force push to main" → high risk → strong confirmation required
-6. API: `curl POST /chat` → returns agent response
-7. API: `curl GET /branches` → returns branch list
-8. API: `curl POST /compare` → returns structured comparison
-9. VS Code: Open sidebar → type query → see response with formatting
-10. VS Code: Use branch comparison widget → see LLM-summarized diff
-11. VS Code: Multi-step operation → see real-time progress updates
-12. Memory: Multiple queries in sequence → session context persists
-13. Error: No git repo → clean error message
-14. Error: Server not running → extension shows connection error
+Test scenarios covering CLI, API, VS Code extension, memory persistence, error handling, safety confirmations.
+
+### Task 19 — Demo preparation
+
+Script a demo flow with a prepared repository that has meaningful branches and diffs.
+
+### Task 20 — README and documentation
+
+Updated README with architecture, installation, usage, screenshots.
 
 ---
 
-### Task 18 — Demo preparation
+## Dependency Graph
 
-**Script a demo flow:**
-1. Open VS Code with OSCAR extension visible in sidebar
-2. "What branches exist in this repo?" → shows branch list
-3. "Compare main and feature-auth" → LLM-summarized diff
-4. "Review the changes in feature-auth vs main" → PR-style code review
-5. "Create a new branch called demo-live" → confirmation → branch created
-6. "Run the test suite" → multi-step execution with progress
-7. Show audit log (`data/logs/audit.jsonl`)
-8. Switch to CLI → same queries work there too
+```
+PARALLEL GROUP A (no dependencies — start immediately):
+  Task 1:  asterix_patch.py (Vertex AI bridge)
+  Task 3:  Git tool functions
+  Task 4:  Shell tool function
+  Task 5:  Web search tool function
+  Task 6:  Browser tool functions
+  Task 7:  System prompt
+  Task 8:  Safety callback
+  Task 12: VS Code extension scaffold
 
-**Prepare:** A demo repository with 2-3 branches that have meaningful, reviewable diffs.
+SEQUENTIAL GROUP B (depends on Group A):
+  Task 2:  agent.py rewrite (needs Tasks 1, 3-8)
+  Task 13: HTTP client (needs Task 12)
+  Task 14: WebviewViewProvider (needs Task 12)
+  Task 15: Chat UI (needs Task 12)
 
----
+SEQUENTIAL GROUP C (depends on Group B):
+  Task 9:  CLI rewrite (needs Task 2)
+  Task 10: Cleanup + deps (needs Task 2)
+  Task 16: Extension activation (needs Tasks 14, 15)
 
-### Task 19 — README and documentation
+SEQUENTIAL GROUP D (depends on Group C):
+  Task 11: FastAPI server (needs Tasks 2, 9)
 
-**Update README.md with:**
-- New project description (GitHub-specialized AI coding assistant)
-- Architecture overview (Asterix agent + FastAPI + VS Code extension)
-- Installation instructions (Python backend + VS Code extension)
-- Usage examples with screenshots
-- How to run: `oscar` (CLI), `oscar-server` (API), VS Code extension
+SEQUENTIAL GROUP E (depends on Group D):
+  Task 17: VS Code publish (needs Tasks 11, 16)
+  Task 18: E2E testing (needs everything)
+  Task 19: Demo prep
+  Task 20: README
+
+```
 
 ---
 
@@ -419,9 +399,9 @@ Extension → Webview:
 - [ ] GitHub API integration via `gh` CLI (PRs, issues, gists, actions)
 - [ ] Code generation and file editing capabilities
 - [ ] Multi-repo support
-- [ ] Voice I/O (STT/TTS) — original spec feature
+- [ ] Voice I/O (STT/TTS)
 - [ ] Qdrant vector store for semantic memory retrieval
 - [ ] Plugin system for third-party tool extensions
-- [ ] Multi-user / authentication for shared servers
-- [ ] WebSocket bidirectional communication (SSE is sufficient for now)
+- [ ] Multi-user / authentication
+- [ ] WebSocket bidirectional communication
 - [ ] Streaming LLM responses (token-by-token)
