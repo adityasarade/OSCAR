@@ -2,7 +2,7 @@
 # Switch between different LLM providers easily
 
 # Current active provider (options: groq, gemini)
-active_provider: groq
+active_provider: gemini
 
 # Provider configurations
 providers:

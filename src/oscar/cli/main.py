@@ -90,6 +90,7 @@ def main(debug, dry_run, config_check):
             console.print(f"[green]✓[/green] Data directory: {settings.data_dir}")
             
             try:
+                # testing it early for api related issues
                 api_key = settings.get_api_key(settings.llm_config.active_provider)
                 console.print(f"[green]✓[/green] API key found")
                 console.print("[bold green]Configuration check passed![/bold green]")

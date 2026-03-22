@@ -6,7 +6,7 @@ Role: Converts natural language requests into structured action plans.
 What it does:
 - Sends the request to an LLM (Groq or Gemini)
 - Gets back a structured JSON plan with step-by-step actions
-- Assesses risk levels for each step
+- Assesses risk levels for each step model
 """
 
 import json
@@ -65,8 +65,11 @@ class LLMPlanner:
                 from groq import Groq
                 return Groq(api_key=api_key)
             elif self.provider == "gemini":
-                from google.genai import Client
-                return Client(api_key=api_key)
+                from google import genai
+                return genai.Client(
+                    vertexai=True,
+                    project="oscar-490517",
+                    location="us-central1")
             elif self.provider == "openai":
                 from openai import OpenAI
                 return OpenAI(api_key=api_key)
@@ -165,6 +168,7 @@ class LLMPlanner:
                         temperature=self.config.temperature
                     )
                 )
+
                 return response.text
             else:
                 # Groq/OpenAI use OpenAI-compatible API
