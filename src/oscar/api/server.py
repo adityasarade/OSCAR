@@ -144,13 +144,22 @@ async def chat_stream(req: ChatRequest):
             step = get_last_step()
             if step and step != last_sent:
                 last_sent = step.copy()
-                yield f"data: {_json.dumps({'type': 'step', 'data': step})}\n\n"
+                # Format step info as readable label for the UI
+                tool_names = step.get('tool_names', step.get('tool_calls', []))
+                step_num = step.get('step_number', step.get('step', '?'))
+                max_steps = step.get('max_steps', '?')
+                label = f"Step {step_num}/{max_steps}"
+                if tool_names:
+                    label += f": {', '.join(tool_names) if isinstance(tool_names, list) else tool_names}"
+                yield f"data: {_json.dumps({'type': 'step', 'data': label})}\n\n"
             await asyncio.sleep(0.3)
 
         if _result["error"]:
-            yield f"data: {_json.dumps({'type': 'error', 'message': _result['error']})}\n\n"
+            yield f"data: {_json.dumps({'type': 'error', 'data': _result['error']})}\n\n"
         else:
-            yield f"data: {_json.dumps({'type': 'done', 'response': _result['response']})}\n\n"
+            # Send the response text first, then signal done
+            yield f"data: {_json.dumps({'type': 'response', 'data': _result['response']})}\n\n"
+            yield f"data: {_json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(_event_generator(), media_type="text/event-stream")
 
