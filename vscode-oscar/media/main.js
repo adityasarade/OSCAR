@@ -304,12 +304,12 @@
 
             case "comparison":
                 setLoading(false);
-                addMessageCard("assistant", msg.data.summary || JSON.stringify(msg.data));
+                addMessageCard("assistant", msg.data.output || msg.data.summary || JSON.stringify(msg.data));
                 break;
 
             case "review":
                 setLoading(false);
-                addMessageCard("assistant", msg.data.summary || JSON.stringify(msg.data));
+                addMessageCard("assistant", msg.data.output || msg.data.summary || JSON.stringify(msg.data));
                 break;
 
             case "history":
@@ -335,6 +335,41 @@
         return e;
     }
 
+    // ── State persistence (survives panel hide/show) ────────────────
+
+    function saveState() {
+        var cards = messagesContainer.querySelectorAll(".message-card");
+        var messages = [];
+        cards.forEach(function (card) {
+            var role = card.classList.contains("user") ? "user" :
+                       card.classList.contains("error") ? "error" : "assistant";
+            messages.push({ role: role, html: card.innerHTML });
+        });
+        vscode.setState({ messages: messages });
+    }
+
+    function restoreState() {
+        var state = vscode.getState();
+        if (state && state.messages && state.messages.length > 0) {
+            removeWelcome();
+            state.messages.forEach(function (m) {
+                var card = el("div", "message-card " + m.role);
+                card.innerHTML = m.html;
+                messagesContainer.appendChild(card);
+            });
+            scrollToBottom();
+        }
+    }
+
+    // Save state after every message
+    var _origAddMessageCard = addMessageCard;
+    addMessageCard = function (role, content) {
+        var card = _origAddMessageCard(role, content);
+        saveState();
+        return card;
+    };
+
     // Boot
     init();
+    restoreState();
 })();

@@ -174,16 +174,34 @@ async def history():
         raise HTTPException(500, str(e))
 
 
-@app.get("/branches", response_model=GitResponse)
+@app.get("/branches")
 async def branches():
-    from oscar.tools.git_tool import git_branches
+    from oscar.tools.git_tool import git_branches, git_status
 
-    output = git_branches()
-    return GitResponse(
-        success=not output.startswith("Error"),
-        output=output,
-        error=output if output.startswith("Error") else None,
-    )
+    raw = git_branches()
+    if raw.startswith("Error"):
+        raise HTTPException(500, raw)
+
+    # Parse branch names from git output
+    branch_list = []
+    current = ""
+    for line in raw.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("* "):
+            name = line[2:].strip()
+            current = name
+            branch_list.append(name)
+        elif "->" in line:
+            continue  # skip HEAD -> origin/main
+        else:
+            # Strip remotes/origin/ prefix for cleaner display
+            name = line.replace("remotes/origin/", "").strip()
+            if name and name not in branch_list:
+                branch_list.append(name)
+
+    return {"branches": branch_list, "current": current}
 
 
 @app.post("/compare", response_model=GitResponse)
