@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>OSCAR — GitHub-Specialized AI Coding Assistant</title>
+  <meta name="description" content="OSCAR is a GitHub-specialized AI coding assistant for VS Code. Branch comparison, PR review, diff analysis, and safe git automation powered by Gemini 2.5 Flash.">
+  <meta name="author" content="Aditya Sarade">
+  <meta name="keywords" content="OSCAR, AI coding assistant, VS Code extension, GitHub agent, branch comparison, code review, Gemini, Asterix, agentic AI">
+
+  <link rel="canonical" href="https://oscar-agent.dev/">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OSCAR — GitHub-Specialized AI Coding Assistant">
+  <meta property="og:description" content="A VS Code extension and CLI for GitHub workflows: branch comparison, PR review, diff analysis, safe git automation. Built on Asterix + Gemini 2.5 Flash.">
+  <meta property="og:image" content="og-image.svg">
+  <meta property="og:url" content="https://oscar-agent.dev/">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="OSCAR — GitHub-Specialized AI Coding Assistant">
+  <meta name="twitter:description" content="Branch comparison, PR review, diff analysis, and safe git automation in VS Code.">
+  <meta name="twitter:image" content="og-image.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "OSCAR",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux, Windows",
+    "description": "GitHub-specialized AI coding assistant for VS Code. Branch comparison, PR review, diff analysis, safe git automation.",
+    "softwareVersion": "0.3.0",
+    "author": { "@type": "Person", "name": "Aditya Sarade" },
+    "license": "https://opensource.org/licenses/MIT",
+    "url": "https://oscar-agent.dev/"
+  }
+  </script>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="#top" aria-label="OSCAR home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M8.5 12.2 11 14.7l5-5"/>
+        </svg>
+      </span>
+      <span class="brand-text">OSCAR</span>
+      <span class="brand-tag">v0.3.0</span>
+    </a>
+
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#architecture">Architecture</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#results">Results</a>
+      <a href="#compare">Compared</a>
+      <a href="#install">Install</a>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle color theme" title="Toggle theme">
+        <svg class="i-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="i-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
+        </svg>
+      </button>
+      <a class="btn btn-ghost" href="https://github.com/adityasarade/OSCAR" target="_blank" rel="noreferrer noopener">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.49-2.7-1.07-2.7-1.07-.37-.92-.9-1.17-.9-1.17-.73-.5.06-.49.06-.49.81.06 1.23.84 1.23.84.72 1.23 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.03 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.28.82 2.15 0 3.07-1.87 3.74-3.65 3.94.29.25.54.73.54 1.47v2.18c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/>
+        </svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ───── HERO ───── -->
+<section id="top" class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow">
+          <span class="dot"></span> Capstone research project · AISSMS IOIT, Pune
+        </span>
+        <h1>A GitHub-specialized<br>AI coding assistant<br><em>for VS Code.</em></h1>
+        <p class="lede">
+          OSCAR understands your repository. Compare branches, review PRs, analyze diffs, and run safe git operations from a sidebar chat — backed by a ReAct agent, persistent memory, and human-in-the-loop confirmation.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#install">
+            <span>Get started</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </a>
+          <a class="btn btn-secondary" href="#architecture">Read the architecture</a>
+        </div>
+        <ul class="hero-meta">
+          <li><kbd>Asterix</kbd> agent core</li>
+          <li><kbd>Gemini 2.5 Flash</kbd> via Vertex AI</li>
+          <li><kbd>FastAPI</kbd> + SSE</li>
+          <li><kbd>TypeScript</kbd> VS Code extension</li>
+        </ul>
+      </div>
+
+      <aside class="hero-term" aria-label="Example OSCAR session">
+        <div class="term-chrome">
+          <span class="term-dot" data-c="r"></span>
+          <span class="term-dot" data-c="y"></span>
+          <span class="term-dot" data-c="g"></span>
+          <span class="term-title">oscar — interactive</span>
+        </div>
+        <pre class="term-body"><code><span class="p">OSCAR&gt;</span> compare main and feat/streaming
+<span class="m">→ git_compare(base="main", head="feat/streaming")</span>
+<span class="c">  12 files · +428 / −96 · 3 commits ahead</span>
+
+Summary
+─ Adds SSE-based streaming for /chat
+─ Introduces confirmation broker for HITL gates
+─ Test coverage extended in tests/test_api.py
+
+<span class="p">OSCAR&gt;</span> review feat/streaming against main
+<span class="m">→ git_review(branch="feat/streaming", base="main")</span>
+<span class="c">  risk: medium · 1 follow-up suggested</span>
+
+<span class="ok">✓</span> Auth headers preserved across reconnects
+<span class="ok">✓</span> Confirmation broker is goroutine-safe
+<span class="warn">!</span> Consider bounded queue for /chat/cancel race
+
+<span class="p">OSCAR&gt;</span> _</code></pre>
+      </aside>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-n">2,163</div><div class="stat-l">lines of Python</div></div>
+      <div class="stat"><div class="stat-n">13</div><div class="stat-l">tools registered</div></div>
+      <div class="stat"><div class="stat-n">11</div><div class="stat-l">API endpoints</div></div>
+      <div class="stat"><div class="stat-n">3-tier</div><div class="stat-l">safety model</div></div>
+      <div class="stat"><div class="stat-n">MIT</div><div class="stat-l">licensed</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───── ARCHITECTURE ───── -->
+<section id="architecture" class="section">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker">01 · System</span>
+      <h2>Five layers, one agent loop.</h2>
+      <p>OSCAR is a thin client and a deliberate backend. The VS Code extension is a chat surface; the FastAPI server brokers a ReAct loop that calls a small, focused set of git, shell, and web tools. Every effectful action passes through a safety layer before it touches your repository.</p>
+    </header>
+
+    <div class="arch">
+      <div class="arch-row" data-layer="1">
+        <span class="arch-label">Client</span>
+        <div class="arch-card">
+          <h3>VS Code extension <small>TypeScript</small></h3>
+          <p>Sidebar <code>WebviewViewProvider</code>, branch widget, HTTP/SSE client</p>
+          <ul class="arch-bullets">
+            <li>activity-bar entry · webview chat UI</li>
+            <li>streamed responses · confirmation prompts</li>
+            <li>configurable <code>oscar.serverUrl</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="arch-row" data-layer="2">
+        <span class="arch-label">Transport</span>
+        <div class="arch-card">
+          <h3>FastAPI server <small>Python</small></h3>
+          <p>11 endpoints — <code>/chat</code>, <code>/chat/stream</code>, <code>/branches</code>, <code>/compare</code>, <code>/review</code>, <code>/history</code>, <code>/memory</code>, <code>/status</code>, plus confirm/cancel and health</p>
+          <ul class="arch-bullets">
+            <li>SSE for token-level streaming</li>
+            <li>broker pattern for confirmation gates</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="arch-row" data-layer="3">
+        <span class="arch-label">Agent</span>
+        <div class="arch-card emphasize">
+          <h3>OSCAR agent layer <small>Asterix runtime</small></h3>
+          <p>ReAct loop, persistent memory blocks, tool dispatch, lifecycle callbacks</p>
+          <ul class="arch-bullets">
+            <li><code>on_before_tool_call</code> · safety + confirmation</li>
+            <li><code>on_after_tool_call</code> · audit logging</li>
+            <li><code>asterix_patch.py</code> bridges Vertex AI Gemini to Asterix</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="arch-row" data-layer="4">
+        <span class="arch-label">Tools</span>
+        <div class="arch-card">
+          <h3>Registered capabilities</h3>
+          <p>Small, composable functions exposed to the LLM via Asterix tool registration</p>
+          <ul class="arch-bullets two-col">
+            <li><code>git_status</code></li>
+            <li><code>git_compare</code></li>
+            <li><code>git_review</code></li>
+            <li><code>git_log</code></li>
+            <li><code>git_diff</code></li>
+            <li><code>git_branches</code></li>
+            <li><code>git_checkout</code></li>
+            <li><code>git_commit</code></li>
+            <li><code>git_push</code></li>
+            <li><code>run_shell_command</code></li>
+            <li><code>web_search</code></li>
+            <li><code>browser_navigate</code> / <code>_search</code> / <code>_extract</code> / <code>_download</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="arch-row" data-layer="5">
+        <span class="arch-label">Model</span>
+        <div class="arch-card">
+          <h3>Gemini 2.5 Flash <small>via Vertex AI</small></h3>
+          <p>Application Default Credentials — no key shipped in the binary. Project <code>oscar-490517</code>, region <code>us-central1</code>. Groq retained as a fallback provider.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───── CAPABILITIES ───── -->
+<section id="capabilities" class="section section-alt">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker">02 · Capabilities</span>
+      <h2>What the agent can actually do.</h2>
+      <p>OSCAR is intentionally narrow. It does git well, shell carefully, and the web sparingly — and everything passes through a single risk classifier before it runs.</p>
+    </header>
+
+    <div class="cap-grid">
+      <article class="cap">
+        <div class="cap-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.5 17.4c4.5-.4 6.5-2 6.5-5.4M6 8.5c0 4 2 5 6.5 5.4"/></svg>
+        </div>
+        <h3>Branch comparison</h3>
+        <p>Symmetric diffs between any two refs with LLM-summarized changes, ahead/behind counts, and per-file impact.</p>
+        <code class="cap-code">git_compare(base, head)</code>
+      </article>
+
+      <article class="cap">
+        <div class="cap-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h12l4 4v8a2 2 0 0 1-2 2H4Z"/><path d="M16 6v4h4"/><path d="M8 14h8M8 17h6"/></svg>
+        </div>
+        <h3>PR-style review</h3>
+        <p>Branch-against-base review with file-level callouts, risk assessment, and follow-up suggestions in plain prose.</p>
+        <code class="cap-code">git_review(branch, base)</code>
+      </article>
+
+      <article class="cap">
+        <div class="cap-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>
+        </div>
+        <h3>Safe shell execution</h3>
+        <p>Allowlisted commands, cross-platform translation (POSIX ⇄ PowerShell), timeouts, working-directory isolation.</p>
+        <code class="cap-code">run_shell_command(cmd)</code>
+      </article>
+
+      <article class="cap">
+        <div class="cap-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+        </div>
+        <h3>Browser + web search</h3>
+        <p>Headless Playwright for navigate / extract / download. Tavily for keyword search with dual-key fallback for rate limits.</p>
+        <code class="cap-code">browser_*  ·  web_search</code>
+      </article>
+
+      <article class="cap">
+        <div class="cap-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <h3>Human-in-the-loop safety</h3>
+        <p>Every tool call is classified <em>low / medium / high</em>. Low auto-approves, medium prompts, high requires a typed <code>CONFIRM</code>.</p>
+        <code class="cap-code">on_before_tool_call → broker</code>
+      </article>
+
+      <article class="cap">
+        <div class="cap-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 13h6M7 16h4"/></svg>
+        </div>
+        <h3>Persistent memory</h3>
+        <p>Asterix memory blocks: session context, knowledge base, user preferences. Inspectable via <code>/memory</code>.</p>
+        <code class="cap-code">agent_states/*.json</code>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ───── RESULTS ───── -->
+<section id="results" class="section">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker">03 · Results</span>
+      <h2>Measured, not marketed.</h2>
+      <p>The numbers below are read directly from the repository at <code>v0.3.0</code>. They are not benchmarks against external systems — they describe OSCAR's surface area and operational characteristics.</p>
+    </header>
+
+    <div class="results-grid">
+      <div class="result-card">
+        <div class="result-h">Surface area</div>
+        <table class="result-table">
+          <tbody>
+            <tr><th>Backend (Python)</th><td>2,163 LOC</td></tr>
+            <tr><th>Git tools</th><td>9 functions</td></tr>
+            <tr><th>Browser tools</th><td>4 functions</td></tr>
+            <tr><th>HTTP endpoints</th><td>11</td></tr>
+            <tr><th>VS Code modules</th><td>4 (.ts)</td></tr>
+            <tr><th>Test functions</th><td>14 across 3 suites</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="result-card">
+        <div class="result-h">Safety classifier</div>
+        <table class="result-table">
+          <tbody>
+            <tr><th>Low risk</th><td>read-only git, web search, status</td></tr>
+            <tr><th>Medium risk</th><td>shell, checkout, browser navigate</td></tr>
+            <tr><th>High risk</th><td>commit, push, destructive ops</td></tr>
+            <tr><th>Confirmation</th><td>broker over SSE · typed <code>CONFIRM</code></td></tr>
+            <tr><th>Bypass</th><td>none in production code path</td></tr>
+            <tr><th>Audit</th><td><code>on_after_tool_call</code> → JSONL log</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="result-card">
+        <div class="result-h">Runtime</div>
+        <table class="result-table">
+          <tbody>
+            <tr><th>Primary LLM</th><td>Gemini 2.5 Flash · Vertex AI</td></tr>
+            <tr><th>Fallback LLM</th><td>Groq (configurable)</td></tr>
+            <tr><th>Auth</th><td>Application Default Credentials</td></tr>
+            <tr><th>Streaming</th><td>Server-Sent Events</td></tr>
+            <tr><th>Python</th><td>≥ 3.10 (tested 3.10–3.13)</td></tr>
+            <tr><th>License</th><td>MIT</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Reproducing the numbers:</strong>
+      <code>cloc src/oscar</code>, <code>grep -r "@agent.tool" src/oscar</code>,
+      <code>grep -E "^@app\.(get|post)" src/oscar/api/server.py</code>,
+      and <code>grep -c "^def test_" tests/test_*.py</code>.
+      The Python source totals 2,163 lines across tools, core, and api.
+    </div>
+  </div>
+</section>
+
+<!-- ───── COMPARISON ───── -->
+<section id="compare" class="section section-alt">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker">04 · Positioning</span>
+      <h2>Where OSCAR sits in the landscape.</h2>
+      <p>OSCAR is not the largest agent, nor the most general. The matrix below is a qualitative comparison drawn from each system's public documentation — it describes shape, not winners.</p>
+    </header>
+
+    <div class="table-wrap">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th scope="col">Capability</th>
+            <th scope="col"><span class="here">OSCAR</span></th>
+            <th scope="col">MemGPT</th>
+            <th scope="col">AIOS</th>
+            <th scope="col">OSAgent</th>
+            <th scope="col">ReAct</th>
+            <th scope="col">Claude Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th>Git-specialized tool surface</th><td class="y">●</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="m">◐</td></tr>
+          <tr><th>VS Code sidebar UI</th><td class="y">●</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><th>Persistent memory blocks</th><td class="y">●</td><td class="y">●</td><td class="m">◐</td><td class="n">—</td><td class="n">—</td><td class="m">◐</td></tr>
+          <tr><th>ReAct-style reasoning loop</th><td class="y">●</td><td class="m">◐</td><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="y">●</td></tr>
+          <tr><th>Human-in-the-loop confirmation</th><td class="y">●</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">●</td></tr>
+          <tr><th>Tiered risk classifier</th><td class="y">●</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="m">◐</td></tr>
+          <tr><th>Local-only by default</th><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="n">—</td></tr>
+          <tr><th>Open source (MIT)</th><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="n">—</td></tr>
+        </tbody>
+      </table>
+      <p class="legend"><span class="y">●</span> present · <span class="m">◐</span> partial · <span class="n">—</span> absent or out of scope</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───── DEMO ───── -->
+<section id="demo" class="section">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker">05 · In use</span>
+      <h2>What a session looks like.</h2>
+      <p>OSCAR is designed to be operated in plain English. Below are the same queries as they arrive over <code>/chat</code> and the tool calls they expand into.</p>
+    </header>
+
+    <div class="demo-grid">
+      <div class="demo-card">
+        <div class="demo-head">You say</div>
+        <pre><code>“Show me what's changed on feat/streaming vs main.”</code></pre>
+        <div class="demo-head">OSCAR runs</div>
+<pre class="mono"><code><span class="c">// risk: low · auto-approved</span>
+git_compare(base="main", head="feat/streaming")
+</code></pre>
+      </div>
+
+      <div class="demo-card">
+        <div class="demo-head">You say</div>
+        <pre><code>“Commit these changes and push.”</code></pre>
+        <div class="demo-head">OSCAR runs</div>
+<pre class="mono"><code><span class="c">// risk: high · CONFIRM required</span>
+git_commit(message="feat: streaming responses")
+git_push(remote="origin", branch="feat/streaming")
+</code></pre>
+      </div>
+
+      <div class="demo-card">
+        <div class="demo-head">You say</div>
+        <pre><code>“Find an example of FastAPI SSE with cleanup.”</code></pre>
+        <div class="demo-head">OSCAR runs</div>
+<pre class="mono"><code><span class="c">// risk: low · auto-approved</span>
+web_search(query="FastAPI SSE EventSource cleanup")
+browser_extract(query="cancellation pattern")
+</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───── INSTALL ───── -->
+<section id="install" class="section section-alt">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker">06 · Quick start</span>
+      <h2>Three steps to a working agent.</h2>
+      <p>OSCAR runs locally. The Vertex AI auth step is the only external dependency; everything else is on your machine.</p>
+    </header>
+
+    <ol class="install">
+      <li>
+        <div class="install-n">1</div>
+        <div class="install-body">
+          <h3>Clone &amp; install</h3>
+<pre><code><span class="c"># requires Python ≥ 3.10</span>
+git clone https://github.com/adityasarade/OSCAR.git
+cd OSCAR
+pip install -e .
+playwright install chromium</code></pre>
+        </div>
+      </li>
+      <li>
+        <div class="install-n">2</div>
+        <div class="install-body">
+          <h3>Authenticate Vertex AI</h3>
+<pre><code><span class="c"># Application Default Credentials — no API key file</span>
+gcloud auth application-default login</code></pre>
+          <p class="small">Optional: set <code>TAVILY_API_KEY1</code> / <code>TAVILY_API_KEY2</code> in <code>.env</code> for web search.</p>
+        </div>
+      </li>
+      <li>
+        <div class="install-n">3</div>
+        <div class="install-body">
+          <h3>Run it</h3>
+<pre><code><span class="c"># interactive CLI</span>
+oscar
+
+<span class="c"># or start the backend for the VS Code extension</span>
+oscar-server</code></pre>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ───── STACK ───── -->
+<section id="stack" class="section">
+  <div class="container">
+    <header class="section-head">
+      <span class="kicker">07 · Built with</span>
+      <h2>Boring tools, on purpose.</h2>
+      <p>Every dependency is here because it earns its weight. Nothing is wrapped, nothing is hidden.</p>
+    </header>
+
+    <ul class="stack">
+      <li><span class="stack-k">Agent</span><span class="stack-v">Asterix 0.2.1</span></li>
+      <li><span class="stack-k">LLM</span><span class="stack-v">Gemini 2.5 Flash · Vertex AI</span></li>
+      <li><span class="stack-k">Fallback</span><span class="stack-v">Groq</span></li>
+      <li><span class="stack-k">API</span><span class="stack-v">FastAPI + Uvicorn + SSE</span></li>
+      <li><span class="stack-k">Browser</span><span class="stack-v">Playwright (chromium)</span></li>
+      <li><span class="stack-k">Search</span><span class="stack-v">Tavily</span></li>
+      <li><span class="stack-k">CLI</span><span class="stack-v">Click + Rich</span></li>
+      <li><span class="stack-k">Extension</span><span class="stack-v">TypeScript · VS Code 1.85+</span></li>
+      <li><span class="stack-k">Validation</span><span class="stack-v">Pydantic 2</span></li>
+      <li><span class="stack-k">Tests</span><span class="stack-v">pytest + httpx</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───── AUTHOR ───── -->
+<section id="about" class="section section-alt">
+  <div class="container">
+    <div class="author">
+      <div class="author-meta">
+        <span class="kicker">08 · Author</span>
+        <h2>Built by Aditya Sarade.</h2>
+        <p>Final year B.Tech, Department of AI &amp; Data Science, AISSMS Institute of Information Technology, Pune. OSCAR is the engineering side of a capstone that also includes a survey paper positioning it against MemGPT, AIOS, OSAgent, and ReAct.</p>
+        <div class="author-links">
+          <a class="btn btn-secondary" href="https://github.com/adityasarade/OSCAR" target="_blank" rel="noreferrer noopener">Source on GitHub</a>
+          <a class="btn btn-ghost" href="https://github.com/adityasarade/asterix" target="_blank" rel="noreferrer noopener">Asterix framework</a>
+        </div>
+      </div>
+      <aside class="author-card">
+        <div class="author-card-h">At a glance</div>
+        <dl>
+          <dt>Project</dt><dd>OSCAR — GitHub-specialized AI coding assistant</dd>
+          <dt>Stage</dt><dd>v0.3.0 backend · v0.1.1 VS Code preview</dd>
+          <dt>Institution</dt><dd>AISSMS IOIT, Pune</dd>
+          <dt>Advisor track</dt><dd>AI &amp; Data Science (final year)</dd>
+          <dt>License</dt><dd>MIT</dd>
+        </dl>
+      </aside>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.2 11 14.7l5-5"/></svg>
+      </span>
+      <span>OSCAR</span>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="#architecture">Architecture</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#results">Results</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/adityasarade/OSCAR" target="_blank" rel="noreferrer noopener">GitHub</a>
+    </nav>
+    <div class="footer-meta">
+      <span>© <span id="year">2026</span> Aditya Sarade · MIT</span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js" defer></script>
+</body>
+</html>

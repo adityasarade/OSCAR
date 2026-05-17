@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://oscar-agent.dev/sitemap.xml
