@@ -8,8 +8,11 @@ Start with: oscar-server  (or: uvicorn oscar.api.server:app --port 8420)
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 import asyncio
+import importlib.metadata as importlib_metadata
 import json
-from typing import Optional
+from pathlib import Path
+import tomllib
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +43,12 @@ class ChatResponse(BaseModel):
     response: str
 
 
+class HistoryEntry(BaseModel):
+    role: str
+    content: str
+    timestamp: Optional[str] = None
+
+
 class CompareRequest(BaseModel):
     base: str = "main"
     head: str
@@ -62,6 +71,20 @@ class GitResponse(BaseModel):
 
 _agent = None
 _chat_executor: Optional[ThreadPoolExecutor] = None
+
+
+def _get_package_version() -> str:
+    """Return installed package version, falling back to pyproject.toml."""
+    try:
+        return importlib_metadata.version("oscar-agent")
+    except importlib_metadata.PackageNotFoundError:
+        try:
+            pyproject_path = Path(__file__).resolve().parents[3] / "pyproject.toml"
+            with open(pyproject_path, "rb") as handle:
+                data = tomllib.load(handle)
+            return data.get("project", {}).get("version", "unknown")
+        except Exception:
+            return "unknown"
 
 
 @asynccontextmanager
@@ -112,6 +135,7 @@ async def health():
 
     return {
         "status": "ok",
+        "version": _get_package_version(),
         "agent_ready": _agent is not None,
         "git_available": git_ok,
     }
@@ -176,12 +200,31 @@ async def chat_stream(req: ChatRequest):
     return StreamingResponse(_event_generator(), media_type="text/event-stream")
 
 
-@app.get("/history")
+@app.get("/history", response_model=List[HistoryEntry])
 async def history():
     if _agent is None:
         raise HTTPException(503, "Agent not initialized")
     try:
-        return _agent.conversation_history[-20:]
+        entries = []
+        for item in _agent.conversation_history[-20:]:
+            if isinstance(item, dict):
+                entries.append(
+                    HistoryEntry(
+                        role=str(item.get("role", "")),
+                        content=str(item.get("content", "")),
+                        timestamp=item.get("timestamp"),
+                    )
+                )
+                continue
+
+            entries.append(
+                HistoryEntry(
+                    role=str(getattr(item, "role", "")),
+                    content=str(getattr(item, "content", "")),
+                    timestamp=getattr(item, "timestamp", None),
+                )
+            )
+        return entries
     except Exception as e:
         raise HTTPException(500, str(e))
 
