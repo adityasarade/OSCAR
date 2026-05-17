@@ -10,11 +10,35 @@ export interface ChatResponse {
 }
 
 // POST /chat/stream — SSE event payloads
+export interface ConfirmPayload {
+    request_id: string;
+    tool_name: string;
+    args_summary: string;
+    risk: "medium" | "high" | "dangerous";
+}
+
 export interface StreamEvent {
-    type: "step" | "tool_call" | "tool_result" | "thinking" | "response" | "error" | "done";
-    data: string;
+    type:
+        | "step"
+        | "tool_call"
+        | "tool_result"
+        | "thinking"
+        | "response"
+        | "error"
+        | "done"
+        | "confirm"
+        | "cancelled";
+    data: string | ConfirmPayload | null;
     step_number?: number;
     tool_name?: string;
+}
+
+// GET /health
+export interface HealthResponse {
+    status: string;
+    version?: string;
+    agent_ready?: boolean;
+    git_available?: boolean;
 }
 
 // GET /branches
@@ -75,16 +99,34 @@ export interface MemoryResponse {
 
 // Webview ↔ Extension messages
 export interface WebviewMessage {
-    type: "chat" | "compare" | "getBranches" | "getHistory" | "review";
+    type:
+        | "chat"
+        | "compare"
+        | "getBranches"
+        | "getHistory"
+        | "review"
+        | "cancel"
+        | "confirmResponse";
     text?: string;
     base?: string;
     head?: string;
     branch?: string;
+    request_id?: string;
+    approved?: boolean;
 }
 
 export interface ExtensionMessage {
-    type: "chatResponse" | "streamEvent" | "branches" | "comparison" | "review"
-        | "history" | "error" | "loading" | "streamDone";
+    type:
+        | "chatResponse"
+        | "streamEvent"
+        | "branches"
+        | "comparison"
+        | "review"
+        | "history"
+        | "error"
+        | "loading"
+        | "streamDone"
+        | "versionMismatch";
     data?: unknown;
     message?: string;
 }

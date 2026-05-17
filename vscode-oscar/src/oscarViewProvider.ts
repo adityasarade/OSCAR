@@ -33,6 +33,32 @@ export class OscarViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleMessage(message: WebviewMessage): Promise<void> {
+        // Cancel/confirm don't trigger the global loading indicator
+        if (message.type === "cancel") {
+            try {
+                await this.client.cancelChat();
+            } catch (err: unknown) {
+                const msg =
+                    err instanceof Error ? err.message : "Cancel failed";
+                this.postMessage({ type: "error", message: msg });
+            }
+            return;
+        }
+
+        if (message.type === "confirmResponse") {
+            try {
+                await this.client.confirmTool(
+                    message.request_id!,
+                    !!message.approved
+                );
+            } catch (err: unknown) {
+                const msg =
+                    err instanceof Error ? err.message : "Confirm failed";
+                this.postMessage({ type: "error", message: msg });
+            }
+            return;
+        }
+
         this.postMessage({ type: "loading", data: true });
 
         try {

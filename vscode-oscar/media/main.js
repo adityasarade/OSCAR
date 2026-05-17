@@ -6,6 +6,7 @@
     let messagesContainer;
     let messageInput;
     let sendBtn;
+    let cancelBtn;
     let baseBranchSelect;
     let headBranchSelect;
     let loadingBar;
@@ -14,6 +15,7 @@
     // Streaming state
     let currentStreamCard = null;
     let currentStepProgress = null;
+    let chatInFlight = false;
 
     // ── Initialization ───────────────────────────────────────────────
 
@@ -62,7 +64,10 @@
         sendBtn = el("button");
         sendBtn.textContent = "Send";
         sendBtn.addEventListener("click", sendMessage);
-        inputContainer.append(messageInput, sendBtn);
+        cancelBtn = el("button", "cancel-btn hidden");
+        cancelBtn.textContent = "Stop";
+        cancelBtn.addEventListener("click", cancelChat);
+        inputContainer.append(messageInput, sendBtn, cancelBtn);
 
         app.append(header, loadingBar, branchSection, messagesContainer, inputContainer);
 
@@ -74,12 +79,18 @@
 
     function sendMessage() {
         const text = messageInput.value.trim();
-        if (!text) return;
+        if (!text || chatInFlight) return;
 
+        chatInFlight = true;
         addMessageCard("user", text);
         vscode.postMessage({ type: "chat", text: text });
         messageInput.value = "";
         messageInput.style.height = "auto";
+    }
+
+    function cancelChat() {
+        if (!chatInFlight) return;
+        vscode.postMessage({ type: "cancel" });
     }
 
     function compareBranches() {
@@ -169,6 +180,10 @@
                 markLastStepDone();
                 break;
 
+            case "confirm":
+                addConfirmCard(event.data);
+                break;
+
             case "response":
                 if (!currentStreamCard) {
                     currentStreamCard = addMessageCard("assistant", "");
@@ -181,10 +196,62 @@
                 addMessageCard("error", event.data);
                 break;
 
+            case "cancelled":
+                addMessageCard("error", "Cancelled by user.");
+                finalizeStream();
+                break;
+
             case "done":
                 finalizeStream();
                 break;
         }
+    }
+
+    function addConfirmCard(payload) {
+        if (!payload || !payload.request_id) return;
+        removeWelcome();
+        const card = el("div", "message-card confirm risk-" + (payload.risk || "medium"));
+
+        const title = el("div", "confirm-title");
+        title.textContent = "Approve " + (payload.risk || "medium") + " action?";
+
+        const body = el("div", "confirm-body");
+        body.textContent = (payload.tool_name || "tool") + "(" + (payload.args_summary || "") + ")";
+
+        const actions = el("div", "confirm-actions");
+        const approveBtn = el("button", "confirm-approve");
+        approveBtn.textContent = "Approve";
+        const rejectBtn = el("button", "confirm-reject");
+        rejectBtn.textContent = "Reject";
+
+        function disableButtons() {
+            approveBtn.disabled = true;
+            rejectBtn.disabled = true;
+        }
+
+        approveBtn.addEventListener("click", function () {
+            disableButtons();
+            approveBtn.textContent = "Approved";
+            vscode.postMessage({
+                type: "confirmResponse",
+                request_id: payload.request_id,
+                approved: true,
+            });
+        });
+        rejectBtn.addEventListener("click", function () {
+            disableButtons();
+            rejectBtn.textContent = "Rejected";
+            vscode.postMessage({
+                type: "confirmResponse",
+                request_id: payload.request_id,
+                approved: false,
+            });
+        });
+
+        actions.append(approveBtn, rejectBtn);
+        card.append(title, body, actions);
+        messagesContainer.appendChild(card);
+        scrollToBottom();
     }
 
     function ensureStepProgress() {
@@ -227,6 +294,7 @@
         }
         currentStreamCard = null;
         currentStepProgress = null;
+        chatInFlight = false;
         setLoading(false);
     }
 
@@ -263,9 +331,11 @@
         if (show) {
             loadingBar.classList.remove("hidden");
             sendBtn.disabled = true;
+            cancelBtn.classList.remove("hidden");
         } else {
             loadingBar.classList.add("hidden");
             sendBtn.disabled = false;
+            cancelBtn.classList.add("hidden");
         }
     }
 

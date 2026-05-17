@@ -2,6 +2,11 @@ import * as vscode from "vscode";
 import { OscarClient } from "./oscarClient";
 import { OscarViewProvider } from "./oscarViewProvider";
 
+function majorMinor(version: string): string {
+    const parts = version.split(".");
+    return parts.length >= 2 ? `${parts[0]}.${parts[1]}` : version;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
     const config = vscode.workspace.getConfiguration("oscar");
     const serverUrl = config.get<string>(
@@ -10,6 +15,7 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 
     const client = new OscarClient(serverUrl);
+    const extVersion: string = context.extension.packageJSON.version;
 
     const provider = new OscarViewProvider(context.extensionUri, client);
     context.subscriptions.push(
@@ -31,11 +37,18 @@ export function activate(context: vscode.ExtensionContext): void {
         })
     );
 
-    // Non-blocking health check
-    client.healthCheck().then((healthy) => {
-        if (!healthy) {
+    // Non-blocking health check + version compatibility warning
+    client.healthCheck().then((health) => {
+        if (!health || health.status !== "ok") {
             vscode.window.showWarningMessage(
                 "OSCAR server is not running. Start it with: oscar-server"
+            );
+            return;
+        }
+        const backendVersion = health.version;
+        if (backendVersion && majorMinor(backendVersion) !== majorMinor(extVersion)) {
+            vscode.window.showWarningMessage(
+                `OSCAR version mismatch: extension ${extVersion} vs backend ${backendVersion}. Some features may not work.`
             );
         }
     });

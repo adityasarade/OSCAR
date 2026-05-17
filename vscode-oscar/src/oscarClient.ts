@@ -4,6 +4,7 @@ import {
     CompareResponse,
     ReviewResponse,
     HistoryResponse,
+    HealthResponse,
     MemoryResponse,
     StreamEvent,
 } from "./types";
@@ -19,14 +20,13 @@ export class OscarClient {
         this.baseUrl = url.replace(/\/+$/, "");
     }
 
-    async healthCheck(): Promise<boolean> {
+    async healthCheck(): Promise<HealthResponse | null> {
         try {
-            const res = await this.request<{ status: string }>("/health", {
+            return await this.request<HealthResponse>("/health", {
                 method: "GET",
             });
-            return res.status === "ok";
         } catch {
-            return false;
+            return null;
         }
     }
 
@@ -115,6 +115,22 @@ export class OscarClient {
 
     async getMemory(): Promise<MemoryResponse> {
         return this.request<MemoryResponse>("/memory", { method: "GET" });
+    }
+
+    async cancelChat(): Promise<void> {
+        await fetch(`${this.baseUrl}/chat/cancel`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+        });
+    }
+
+    async confirmTool(requestId: string, approved: boolean): Promise<void> {
+        await fetch(`${this.baseUrl}/chat/confirm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ request_id: requestId, approved }),
+        });
     }
 
     private async request<T>(path: string, options: RequestInit): Promise<T> {

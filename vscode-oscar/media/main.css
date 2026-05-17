@@ -267,3 +267,70 @@ body {
     color: var(--vscode-editor-foreground);
     margin-bottom: 8px;
 }
+
+/* Cancel (stop) button */
+.cancel-btn {
+    background: var(--vscode-errorForeground, #e51400) !important;
+    color: var(--vscode-button-foreground) !important;
+}
+
+.cancel-btn.hidden {
+    display: none;
+}
+
+/* Tool-call confirmation card */
+.message-card.confirm {
+    border-left: 3px solid var(--vscode-editorWarning-foreground, #cca700);
+    background: var(--vscode-editorWidget-background);
+    padding: 10px 12px;
+}
+
+.message-card.confirm.risk-high {
+    border-left-color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.message-card.confirm.risk-dangerous {
+    border-left-color: var(--vscode-errorForeground, #e51400);
+}
+
+.confirm-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.confirm-body {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 12px;
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.confirm-actions button {
+    flex: 1;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.confirm-approve {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.confirm-reject {
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-button-border, transparent) !important;
+}
+
+.confirm-actions button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
