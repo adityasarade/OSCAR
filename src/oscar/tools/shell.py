@@ -9,11 +9,13 @@ import subprocess
 import shlex
 import re
 import platform
+import logging
 
 from oscar.config.settings import SAFETY_PATTERNS
 
 
 _IS_WINDOWS = platform.system() == "Windows"
+logger = logging.getLogger(__name__)
 
 SAFE_COMMANDS = {
     "ls", "dir", "pwd", "cd", "mkdir", "echo", "cat", "type",
@@ -75,12 +77,14 @@ def run_shell_command(command: str, cwd: str = "", timeout: int = 30) -> str:
     """
     error = _validate_command(command)
     if error:
+        logger.warning("Blocked shell command: %s: %s", command, error)
         return f"Error: Command blocked — {error}"
 
     translated = _translate_command(command)
     run_cwd = cwd if cwd else None
 
     try:
+        logger.debug("Running shell command: %s", translated)
         if _IS_WINDOWS:
             result = subprocess.run(
                 translated,
@@ -109,6 +113,8 @@ def run_shell_command(command: str, cwd: str = "", timeout: int = 30) -> str:
         return result.stdout.strip() if result.stdout else "Command executed successfully"
 
     except subprocess.TimeoutExpired:
+        logger.warning("Shell command timed out after %s seconds: %s", timeout, command)
         return f"Error: Command timed out after {timeout} seconds"
     except Exception as e:
+        logger.error("Shell command failed: %s: %s", command, e)
         return f"Error: {e}"

@@ -10,12 +10,11 @@ Usage:
 """
 
 import json
+import logging
 import platform
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
-
-from rich.console import Console
 
 # Apply Asterix patches (idempotent — adds Gemini/Vertex AI support)
 import oscar.core.asterix_patch  # noqa: F401
@@ -37,7 +36,7 @@ from oscar.tools.browser import (
     browser_navigate, browser_search, browser_extract, browser_download,
 )
 
-console = Console()
+logger = logging.getLogger(__name__)
 
 # LLM provider is Gemini/Vertex AI sole supported provider; llm_config.yaml was removed.
 
@@ -142,7 +141,7 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
             # Safety gate
             approved = on_before_tool_call(tool_name, arguments)
             if not approved:
-                console.print(f"[yellow]  Rejected: {tool_name}[/yellow]")
+                logger.warning("Rejected tool call: %s", tool_name)
                 results.append({
                     "tool_call_id": tool_id,
                     "role": "tool",
@@ -155,7 +154,7 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
             # Execute via original registry
             try:
                 tool_result = agent._tool_registry.execute_tool(tool_name, **arguments)
-                console.print(f"[green]  Done: {tool_name}[/green]")
+                logger.info("Completed tool call: %s", tool_name)
 
                 results.append({
                     "tool_call_id": tool_id,
@@ -164,7 +163,7 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
                     "content": str(tool_result),
                 })
             except Exception as e:
-                console.print(f"[red]  Error: {tool_name} — {e}[/red]")
+                logger.error("Tool call failed: %s: %s", tool_name, e)
                 results.append({
                     "tool_call_id": tool_id,
                     "role": "tool",
@@ -241,7 +240,10 @@ def _create_agent() -> Agent:
     agent.tool(name="browser_download", description="Download a file from a URL")(browser_download)
 
     tool_count = len(agent.get_all_tools())
-    console.print(f"[dim]OSCAR agent initialized — {tool_count} tools (Asterix + Gemini 2.5 Flash via Vertex AI)[/dim]")
+    logger.info(
+        "OSCAR agent initialized with %s tools (Asterix + Gemini 2.5 Flash via Vertex AI)",
+        tool_count,
+    )
     return agent
 
 

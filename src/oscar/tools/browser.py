@@ -8,6 +8,7 @@ Functions:
 - browser_download(url) — download a file from a URL
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, List
 
@@ -15,6 +16,8 @@ import requests
 from bs4 import BeautifulSoup
 
 from oscar.config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 try:
     from playwright.sync_api import sync_playwright, Browser, Page
@@ -85,7 +88,8 @@ def _get_page_content() -> str:
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         return " ".join(chunk for chunk in chunks if chunk)
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to extract page content: %s", e)
         return ""
 
 
@@ -112,9 +116,11 @@ def _extract_search_results() -> List[Dict[str, str]]:
                             ),
                         }
                     )
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to parse search result element: %s", e)
                 continue
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to extract search results: %s", e)
         pass
     return results
 

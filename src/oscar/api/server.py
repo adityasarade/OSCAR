@@ -19,6 +19,7 @@ import uvicorn
 
 from oscar.config.settings import settings
 from oscar.core.agent import get_agent, get_last_step
+from oscar.logging_config import configure_logging
 from oscar.tools.git_tool import (
     git_branches,
     git_compare,
@@ -67,6 +68,7 @@ _chat_executor: Optional[ThreadPoolExecutor] = None
 async def lifespan(app: FastAPI):
     global _agent, _chat_executor
 
+    configure_logging()
     _agent = get_agent()
     _chat_executor = ThreadPoolExecutor(
         max_workers=1, thread_name_prefix="oscar-chat"

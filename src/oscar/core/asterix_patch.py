@@ -332,15 +332,16 @@ def apply_patches():
             self._provider_failures["gemini"] = 0
 
             logger.info(
-                f"Gemini completion: {result.usage['total_tokens']} tokens "
-                f"in {processing_time:.3f}s"
+                "Gemini completion: %s tokens in %.3fs",
+                result.usage["total_tokens"],
+                processing_time,
             )
             return result
 
         except Exception as e:
             self._error_count["gemini"] += 1
             self._provider_failures["gemini"] += 1
-            logger.error(f"Gemini API error: {e}")
+            logger.error("Gemini API error: %s", e)
             raise LLMError(f"Gemini error: {e}")
 
     LLMProviderManager._call_gemini = _call_gemini
@@ -394,8 +395,9 @@ def apply_patches():
                 and selected_provider != self._fallback_provider
             ):
                 logger.warning(
-                    f"Provider {selected_provider} failed, "
-                    f"trying fallback {self._fallback_provider}"
+                    "Provider %s failed, trying fallback %s",
+                    selected_provider,
+                    self._fallback_provider,
                 )
                 return await patched_complete(
                     self,
@@ -424,8 +426,8 @@ def apply_patches():
             return self._primary_provider
         if self._provider_failures[self._fallback_provider] < self._max_failures:
             logger.warning(
-                f"Primary provider {self._primary_provider} has failed "
-                f"too many times, using fallback"
+                "Primary provider %s has failed too many times, using fallback",
+                self._primary_provider,
             )
             return self._fallback_provider
         logger.warning(

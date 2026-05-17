@@ -6,8 +6,11 @@ from the original WebSearchTool class.
 """
 
 from typing import Any, Dict, List
+import logging
 
 from oscar.config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _init_clients() -> List:
@@ -19,9 +22,11 @@ def _init_clients() -> List:
         for key in settings.get_tavily_keys():
             try:
                 clients.append(TavilyClient(api_key=key))
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to initialize Tavily client: %s", e)
                 continue
     except ImportError:
+        logger.debug("Tavily package is not installed")
         pass
     return clients
 
@@ -83,7 +88,9 @@ def web_search(query: str) -> str:
         except Exception as e:
             last_error = str(e)
             if "rate" in last_error.lower() or "limit" in last_error.lower() or "429" in last_error:
+                logger.warning("Tavily key rate limited: %s", last_error)
                 continue
+            logger.error("Tavily search failed: %s", last_error)
             return f"Error: Search failed — {last_error}"
 
     return f"Error: All Tavily API keys exhausted or rate limited. Last error: {last_error}"

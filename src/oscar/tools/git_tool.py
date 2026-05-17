@@ -6,10 +6,12 @@ injection. Large outputs are truncated at 50K characters.
 """
 
 import subprocess
+import logging
 from typing import List
 
 
 _TRUNCATE_LIMIT = 50_000
+logger = logging.getLogger(__name__)
 
 
 def _truncate(text: str, limit: int = _TRUNCATE_LIMIT) -> str:
@@ -21,6 +23,7 @@ def _truncate(text: str, limit: int = _TRUNCATE_LIMIT) -> str:
 
 def _run_git(args: List[str]) -> str:
     """Run a git command and return stdout or a formatted error string."""
+    logger.debug("Running git command: git %s", " ".join(args))
     result = subprocess.run(
         ["git"] + args,
         capture_output=True,
@@ -28,6 +31,7 @@ def _run_git(args: List[str]) -> str:
     )
     if result.returncode != 0:
         error = result.stderr.strip() or f"git command failed with exit code {result.returncode}"
+        logger.warning("Git command failed: git %s: %s", " ".join(args), error)
         return f"Error: {error}"
     return result.stdout.strip()
 

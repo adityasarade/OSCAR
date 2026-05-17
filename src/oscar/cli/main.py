@@ -11,6 +11,8 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.markdown import Markdown
 
+from oscar.logging_config import configure_logging
+
 console = Console()
 
 
@@ -132,6 +134,8 @@ def main(debug, config_check):
 
     if debug:
         os.environ["OSCAR_DEBUG"] = "true"
+
+    configure_logging()
 
     try:
         if config_check:
