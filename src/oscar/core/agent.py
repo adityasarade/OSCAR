@@ -135,8 +135,6 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
     """
 
     # --- Custom system prompt ------------------------------------------------
-    original_build = agent._build_system_prompt
-
     def patched_build_system_prompt() -> str:
         """Replace generic prompt with OSCAR's GitHub-focused prompt."""
         # Start with our custom prompt
@@ -166,8 +164,6 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
     agent._build_system_prompt = patched_build_system_prompt
 
     # --- on_before_tool_call (safety confirmation) ---------------------------
-    original_execute = agent._execute_tool_calls
-
     def patched_execute_tool_calls(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Wrap tool execution with safety check and audit logging."""
         results = []

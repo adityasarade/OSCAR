@@ -161,7 +161,7 @@ def main(ctx, debug, config_check):
             agent = get_agent()
             tool_count = len(agent.get_all_tools())
             console.print(f"[green]OK[/green] Agent initialized with {tool_count} tools")
-            console.print(f"[green]OK[/green] Model: gemini-2.5-flash (Vertex AI)")
+            console.print("[green]OK[/green] Model: gemini-2.5-flash (Vertex AI)")
             console.print(f"[green]OK[/green] Memory blocks: {list(agent.blocks.keys())}")
             return
 
