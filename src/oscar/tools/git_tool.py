@@ -213,7 +213,7 @@ def git_diff(file_path: str, staged: bool = False) -> str:
 
 
 def git_branches() -> str:
-    """List all local and remote branches."""
+    """List all local and remote branches; current branch is prefixed with '* '."""
     command = [
         "git",
         "for-each-ref",
@@ -232,15 +232,27 @@ def git_branches() -> str:
         logger.warning("Git branch listing failed: %s", error)
         return error
 
+    # Resolve current branch (empty string when HEAD is detached).
+    current_result = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    current = current_result.stdout.strip() if current_result.returncode == 0 else ""
+
     branches = []
     for raw_line in result.stdout.splitlines():
         branch = raw_line.strip()
         if not branch or branch == "origin/HEAD":
             continue
         if branch.startswith("origin/"):
-            branch = f"remotes/{branch}"
-        if branch not in branches:
-            branches.append(branch)
+            display = f"remotes/{branch}"
+        else:
+            display = branch
+        prefix = "* " if branch == current else "  "
+        line = f"{prefix}{display}"
+        if line not in branches:
+            branches.append(line)
 
     return "\n".join(branches)
 
