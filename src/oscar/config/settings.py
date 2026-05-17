@@ -4,31 +4,11 @@ Simplified configuration loading and validation.
 """
 
 import os
-import yaml
 from pathlib import Path
-from typing import Dict, Any
-from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
-
-class LLMProviderConfig(BaseModel):
-    """Configuration for a single LLM provider."""
-    base_url: str = None  # Optional - Gemini doesn't use OpenAI-compatible endpoint
-    model: str
-    max_tokens: int = 4096
-    temperature: float = 0.1
-    timeout: int = 60
-
-
-class LLMConfig(BaseModel):
-    """Complete LLM configuration."""
-    active_provider: str
-    providers: Dict[str, LLMProviderConfig]
-    system_prompt: str
-    planning_template: str
 
 
 class OSCARSettings:
@@ -42,31 +22,11 @@ class OSCARSettings:
         
         # Ensure data directories exist
         self._create_data_dirs()
-        
-        # Load LLM configuration
-        self.llm_config = self._load_llm_config()
     
     def _create_data_dirs(self):
         """Create required data directories."""
         for subdir in ["models", "memory", "logs", "downloads"]:
             (self.data_dir / subdir).mkdir(parents=True, exist_ok=True)
-    
-    def _load_llm_config(self) -> LLMConfig:
-        """Load LLM configuration from YAML file."""
-        config_path = self.config_dir / "llm_config.yaml"
-        
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config_data = yaml.safe_load(f)
-        
-        return LLMConfig(**config_data)
-    
-    def get_active_llm_config(self) -> LLMProviderConfig:
-        """Get configuration for the currently active LLM provider."""
-        active_provider = self.llm_config.active_provider
-        if active_provider not in self.llm_config.providers:
-            raise ValueError(f"Active provider '{active_provider}' not found in config")
-        
-        return self.llm_config.providers[active_provider]
     
     def get_api_key(self, provider: str) -> str:
         """Get API key for the specified provider from environment variables."""

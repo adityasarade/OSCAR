@@ -1,9 +1,24 @@
 """
-Asterix v0.2.0 Runtime Patch — Gemini via Vertex AI
+Asterix v0.2.1 Runtime Patch — Gemini via Vertex AI
 
 Monkey-patches Asterix to support "gemini" as an LLM provider using the
 Google GenAI SDK with Vertex AI authentication. Import this module before
 creating any Asterix Agent.
+
+Patched symbols:
+- LLMConfig.__post_init__
+- LLMProviderManager.__init__
+- LLMProviderManager._ensure_clients_initialized
+- LLMProviderManager._call_gemini
+- LLMProviderManager.complete
+- LLMProviderManager._select_provider
+- LLMProviderManager.get_performance_metrics
+- asterix.core.llm_manager.llm_manager._gemini_client
+- asterix.core.llm_manager.llm_manager._operation_count["gemini"]
+- asterix.core.llm_manager.llm_manager._total_processing_time["gemini"]
+- asterix.core.llm_manager.llm_manager._total_tokens["gemini"]
+- asterix.core.llm_manager.llm_manager._error_count["gemini"]
+- asterix.core.llm_manager.llm_manager._provider_failures["gemini"]
 
 This patch is temporary — once Asterix natively supports Vertex AI, this
 file can be deleted.
@@ -28,6 +43,8 @@ from asterix.core.llm_manager import (
 logger = logging.getLogger(__name__)
 
 _patched = False
+
+# If you upgrade asterix-agent, audit each patched symbol against the new version before bumping the pin.
 
 # Vertex AI project config — reads from env, falls back to defaults
 _VERTEX_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("VERTEX_PROJECT", "oscar-490517"))

@@ -7,13 +7,24 @@ Start with: oscar-server  (or: uvicorn oscar.api.server:app --port 8420)
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+import asyncio
+import json
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import uvicorn
 
 from oscar.config.settings import settings
+from oscar.core.agent import get_agent, get_last_step
+from oscar.tools.git_tool import (
+    git_branches,
+    git_compare,
+    git_review,
+    git_status,
+)
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -55,7 +66,6 @@ _chat_executor: Optional[ThreadPoolExecutor] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _agent, _chat_executor
-    from oscar.core.agent import get_agent
 
     _agent = get_agent()
     _chat_executor = ThreadPoolExecutor(
@@ -92,8 +102,6 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    from oscar.tools.git_tool import git_status
-
     try:
         status = git_status()
         git_ok = not status.startswith("Error")
@@ -109,8 +117,6 @@ async def health():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    import asyncio
-
     if _agent is None or _chat_executor is None:
         raise HTTPException(503, "Agent not initialized")
     try:
@@ -126,11 +132,6 @@ async def chat(req: ChatRequest):
 @app.post("/chat/stream")
 async def chat_stream(req: ChatRequest):
     """SSE streaming endpoint — sends step-by-step progress events."""
-    import asyncio
-    import json as _json
-    from fastapi.responses import StreamingResponse
-    from oscar.core.agent import get_last_step
-
     if _agent is None or _chat_executor is None:
         raise HTTPException(503, "Agent not initialized")
 
@@ -160,15 +161,15 @@ async def chat_stream(req: ChatRequest):
                 label = f"Step {step_num}/{max_steps}"
                 if tool_names:
                     label += f": {', '.join(tool_names) if isinstance(tool_names, list) else tool_names}"
-                yield f"data: {_json.dumps({'type': 'step', 'data': label})}\n\n"
+                yield f"data: {json.dumps({'type': 'step', 'data': label})}\n\n"
             await asyncio.sleep(0.3)
 
         if _result["error"]:
-            yield f"data: {_json.dumps({'type': 'error', 'data': _result['error']})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'data': _result['error']})}\n\n"
         else:
             # Send the response text first, then signal done
-            yield f"data: {_json.dumps({'type': 'response', 'data': _result['response']})}\n\n"
-            yield f"data: {_json.dumps({'type': 'done'})}\n\n"
+            yield f"data: {json.dumps({'type': 'response', 'data': _result['response']})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(_event_generator(), media_type="text/event-stream")
 
@@ -185,8 +186,6 @@ async def history():
 
 @app.get("/branches")
 async def branches():
-    from oscar.tools.git_tool import git_branches, git_status
-
     raw = git_branches()
     if raw.startswith("Error"):
         raise HTTPException(500, raw)
@@ -215,8 +214,6 @@ async def branches():
 
 @app.post("/compare", response_model=GitResponse)
 async def compare(req: CompareRequest):
-    from oscar.tools.git_tool import git_compare
-
     output = git_compare(req.base, req.head)
     return GitResponse(
         success=not output.startswith("Error"),
@@ -227,8 +224,6 @@ async def compare(req: CompareRequest):
 
 @app.post("/review", response_model=GitResponse)
 async def review(req: ReviewRequest):
-    from oscar.tools.git_tool import git_review
-
     output = git_review(req.branch, req.base)
     return GitResponse(
         success=not output.startswith("Error"),
@@ -273,8 +268,6 @@ def start_server(host: Optional[str] = None, port: Optional[int] = None):
     Defaults bind to 127.0.0.1 (loopback only). Override via OSCAR_HOST /
     OSCAR_PORT env vars, or by passing explicit arguments.
     """
-    import uvicorn
-
     uvicorn.run(
         app,
         host=host or settings.host,

@@ -39,6 +39,8 @@ from oscar.tools.browser import (
 
 console = Console()
 
+# LLM provider is Gemini/Vertex AI sole supported provider; llm_config.yaml was removed.
+
 # ---------------------------------------------------------------------------
 # Audit logging
 # ---------------------------------------------------------------------------
