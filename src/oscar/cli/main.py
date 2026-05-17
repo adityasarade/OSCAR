@@ -3,14 +3,18 @@ OSCAR CLI — GitHub-Specialized AI Coding Assistant
 """
 
 import click
+import json
 import sys
 import os
+from collections import deque
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 from rich.markdown import Markdown
 
+from oscar.config.settings import settings
 from oscar.logging_config import configure_logging
 
 console = Console()
@@ -126,16 +130,29 @@ def start_api_server():
         console.print(f"[red]Server error: {e}[/red]")
 
 
-@click.command()
+def _tail_lines(path: Path, count: int) -> list[str]:
+    """Return the last count lines from path."""
+    if count <= 0 or not path.exists():
+        return []
+
+    with open(path, "r", encoding="utf-8") as handle:
+        return list(deque(handle, maxlen=count))
+
+
+@click.group(invoke_without_command=True)
+@click.pass_context
 @click.option("--debug", is_flag=True, help="Enable debug mode")
 @click.option("--config-check", is_flag=True, help="Check configuration and exit")
-def main(debug, config_check):
+def main(ctx, debug, config_check):
     """OSCAR — GitHub-Specialized AI Coding Assistant"""
 
     if debug:
         os.environ["OSCAR_DEBUG"] = "true"
 
     configure_logging()
+
+    if ctx.invoked_subcommand is not None:
+        return
 
     try:
         if config_check:
@@ -185,6 +202,37 @@ def main(debug, config_check):
             import traceback
             traceback.print_exc()
         sys.exit(1)
+
+
+@main.command("audit")
+@click.option("--tail", default=20, show_default=True, type=int, help="Number of recent audit entries to show")
+def audit(tail):
+    """Show recent audit log entries."""
+    audit_path = settings.data_dir / "logs" / "audit.jsonl"
+    rows = _tail_lines(audit_path, tail)
+
+    table = Table(title="OSCAR Audit Log")
+    table.add_column("Timestamp")
+    table.add_column("Tool")
+    table.add_column("Arguments")
+
+    for row in rows:
+        try:
+            entry = json.loads(row)
+            arguments = json.dumps(entry.get("arguments", {}))
+            table.add_row(
+                str(entry.get("timestamp", "")),
+                str(entry.get("tool", "")),
+                arguments,
+            )
+        except json.JSONDecodeError:
+            table.add_row("", "", row.strip())
+
+    if not rows:
+        console.print(f"[dim]No audit entries found at {audit_path}[/dim]")
+        return
+
+    console.print(table)
 
 
 if __name__ == "__main__":

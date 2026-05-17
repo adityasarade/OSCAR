@@ -11,6 +11,7 @@ Usage:
 
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import platform
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +47,23 @@ logger = logging.getLogger(__name__)
 
 _audit_path = settings.data_dir / "logs" / "audit.jsonl"
 _audit_path.parent.mkdir(parents=True, exist_ok=True)
+_audit_logger = logging.getLogger("oscar.audit")
+_audit_logger.setLevel(logging.INFO)
+_audit_logger.propagate = False
+
+if not any(
+    isinstance(handler, RotatingFileHandler)
+    and Path(handler.baseFilename).resolve() == _audit_path.resolve()
+    for handler in _audit_logger.handlers
+):
+    _audit_handler = RotatingFileHandler(
+        _audit_path,
+        maxBytes=5000000,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    _audit_handler.setFormatter(logging.Formatter("%(message)s"))
+    _audit_logger.addHandler(_audit_handler)
 
 
 def _audit_log(tool_name: str, arguments: dict) -> None:
@@ -56,10 +74,9 @@ def _audit_log(tool_name: str, arguments: dict) -> None:
             "tool": tool_name,
             "arguments": {k: str(v)[:200] for k, v in arguments.items()},
         }
-        with open(_audit_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass
+        _audit_logger.info(json.dumps(entry))
+    except Exception as e:
+        logger.debug("Failed to write audit log entry: %s", e)
 
 
 # ---------------------------------------------------------------------------
