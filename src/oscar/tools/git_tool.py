@@ -7,7 +7,7 @@ injection. Large outputs are truncated at 50K characters.
 
 import subprocess
 import logging
-from typing import List
+from typing import Any, Dict, List
 
 
 _TRUNCATE_LIMIT = 50_000
@@ -36,13 +36,109 @@ def _run_git(args: List[str]) -> str:
     return result.stdout.strip()
 
 
+def _git_error(result: subprocess.CompletedProcess) -> str:
+    """Return the public error string for a failed git subprocess."""
+    error = result.stderr.strip() or f"git command failed with exit code {result.returncode}"
+    return f"Error: {error}"
+
+
+def _parse_porcelain_v2(output: str) -> Dict[str, Any]:
+    """Parse `git status --porcelain=v2 --branch` output."""
+    parsed: Dict[str, Any] = {
+        "branch": "",
+        "upstream": "",
+        "ahead": 0,
+        "behind": 0,
+        "changes": [],
+    }
+
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if line.startswith("# "):
+            fields = line[2:].split()
+            if not fields:
+                continue
+            key = fields[0]
+            if key == "branch.head" and len(fields) > 1:
+                parsed["branch"] = fields[1]
+            elif key == "branch.upstream" and len(fields) > 1:
+                parsed["upstream"] = fields[1]
+            elif key == "branch.ab" and len(fields) > 2:
+                parsed["ahead"] = int(fields[1].lstrip("+"))
+                parsed["behind"] = int(fields[2].lstrip("-"))
+            continue
+
+        if line.startswith("? "):
+            parsed["changes"].append({"status": "??", "path": line[2:]})
+            continue
+
+        if line.startswith("! "):
+            parsed["changes"].append({"status": "!!", "path": line[2:]})
+            continue
+
+        if line.startswith("1 "):
+            fields = line.split(" ", 8)
+            if len(fields) == 9:
+                parsed["changes"].append({"status": fields[1], "path": fields[8]})
+            continue
+
+        if line.startswith("2 "):
+            fields = line.split(" ", 9)
+            if len(fields) == 10:
+                path = fields[9].split("\t", 1)[0]
+                parsed["changes"].append({"status": fields[1], "path": path})
+            continue
+
+        if line.startswith("u "):
+            fields = line.split(" ", 10)
+            if len(fields) == 11:
+                parsed["changes"].append({"status": fields[1], "path": fields[10]})
+
+    return parsed
+
+
+def _format_parsed_status(parsed: Dict[str, Any]) -> str:
+    """Build OSCAR's public git status string from parsed porcelain data."""
+    branch = parsed["branch"] or "(unknown)"
+    parts = [f"Branch: {branch}"]
+
+    if parsed["upstream"]:
+        parts.append(f"Upstream: {parsed['upstream']}")
+
+    ahead = parsed["ahead"]
+    behind = parsed["behind"]
+    if ahead or behind:
+        parts.append(f"Ahead: {ahead} Behind: {behind}")
+
+    parts.append("")
+    if not parsed["changes"]:
+        parts.append("Working tree clean.")
+    else:
+        parts.append("Changes:")
+        for change in parsed["changes"]:
+            parts.append(f"{change['status']} {change['path']}")
+
+    return "\n".join(parts)
+
+
 def git_status() -> str:
     """Get the current repository status including branch name, repo root, and working tree state."""
-    repo_root = _run_git(["rev-parse", "--show-toplevel"])
-    branch = _run_git(["branch", "--show-current"])
-    status = _run_git(["status"])
+    command = ["git", "status", "--porcelain=v2", "--branch"]
+    logger.debug("Running git command: %s", " ".join(command))
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error = _git_error(result)
+        logger.warning("Git status failed: %s", error)
+        return error
 
-    return f"Repository: {repo_root}\nBranch: {branch}\n\n{status}"
+    return _truncate(_format_parsed_status(_parse_porcelain_v2(result.stdout)))
 
 
 def git_compare(base: str, head: str) -> str:
@@ -118,7 +214,35 @@ def git_diff(file_path: str, staged: bool = False) -> str:
 
 def git_branches() -> str:
     """List all local and remote branches."""
-    return _run_git(["branch", "-a"])
+    command = [
+        "git",
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/heads/",
+        "refs/remotes/origin/",
+    ]
+    logger.debug("Running git command: %s", " ".join(command))
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error = _git_error(result)
+        logger.warning("Git branch listing failed: %s", error)
+        return error
+
+    branches = []
+    for raw_line in result.stdout.splitlines():
+        branch = raw_line.strip()
+        if not branch or branch == "origin/HEAD":
+            continue
+        if branch.startswith("origin/"):
+            branch = f"remotes/{branch}"
+        if branch not in branches:
+            branches.append(branch)
+
+    return "\n".join(branches)
 
 
 def git_checkout(branch: str) -> str:
