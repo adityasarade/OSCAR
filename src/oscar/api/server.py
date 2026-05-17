@@ -12,7 +12,6 @@ import importlib.metadata as importlib_metadata
 import json
 from pathlib import Path
 import threading
-import tomllib
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Response
@@ -91,6 +90,11 @@ def _get_package_version() -> str:
     try:
         return importlib_metadata.version("oscar-agent")
     except importlib_metadata.PackageNotFoundError:
+        # tomllib is 3.11+; lazy-import so 3.10 doesn't choke at module load.
+        try:
+            import tomllib  # type: ignore[import-not-found]
+        except ImportError:
+            return "unknown"
         try:
             pyproject_path = Path(__file__).resolve().parents[3] / "pyproject.toml"
             with open(pyproject_path, "rb") as handle:
