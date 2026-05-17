@@ -86,10 +86,35 @@ def _audit_log(tool_name: str, arguments: dict) -> None:
 _last_step: Dict[str, Any] = {}
 
 
-def _on_step(step_info: dict) -> None:
+def _step_label(step_info: dict) -> str:
+    """Format Asterix step info as the public SSE step label."""
+    tool_names = step_info.get("tool_names", step_info.get("tool_calls", []))
+    step_num = step_info.get("step_number", step_info.get("step", "?"))
+    max_steps = step_info.get("max_steps", "?")
+    label = f"Step {step_num}/{max_steps}"
+    if tool_names:
+        tools = ", ".join(tool_names) if isinstance(tool_names, list) else tool_names
+        label += f": {tools}"
+    return label
+
+
+def _on_step(step_number_or_info: Any, step_info: dict | None = None) -> None:
     """Store latest heartbeat step info."""
     global _last_step
+    if step_info is None and isinstance(step_number_or_info, dict):
+        step_info = step_number_or_info
+    elif step_info is None:
+        step_info = {"step_number": step_number_or_info}
+
     _last_step = step_info
+    try:
+        from oscar.api.runtime import get_active_broker
+
+        broker = get_active_broker()
+    except Exception:
+        broker = None
+    if broker is not None:
+        broker.emit({"type": "step", "data": _step_label(step_info)})
 
 
 def get_last_step() -> Dict[str, Any]:
@@ -232,6 +257,7 @@ def _create_agent() -> Agent:
 
     # Patch in OSCAR features (system prompt, safety, audit)
     _patch_agent(agent, prompt)
+    agent.on_step = _on_step
 
     # -- Register git tools ---------------------------------------------------
     agent.tool(name="git_status", description="Show repository status, current branch, and working tree state")(git_status)

@@ -11,17 +11,24 @@ import asyncio
 import importlib.metadata as importlib_metadata
 import json
 from pathlib import Path
+import threading
 import tomllib
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 
 from oscar.config.settings import settings
-from oscar.core.agent import get_agent, get_last_step
+from oscar.api.runtime import (
+    ChatBroker,
+    clear_active_broker,
+    get_active_broker,
+    set_active_broker,
+)
+from oscar.core.agent import get_agent
 from oscar.logging_config import configure_logging
 from oscar.tools.git_tool import (
     git_branches,
@@ -41,6 +48,11 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+
+class ConfirmRequest(BaseModel):
+    request_id: str
+    approved: bool
 
 
 class HistoryEntry(BaseModel):
@@ -71,6 +83,7 @@ class GitResponse(BaseModel):
 
 _agent = None
 _chat_executor: Optional[ThreadPoolExecutor] = None
+_chat_inflight_lock = threading.Lock()
 
 
 def _get_package_version() -> str:
@@ -145,6 +158,8 @@ async def health():
 async def chat(req: ChatRequest):
     if _agent is None or _chat_executor is None:
         raise HTTPException(503, "Agent not initialized")
+    if not _chat_inflight_lock.acquire(blocking=False):
+        raise HTTPException(409, "chat in progress")
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
@@ -153,6 +168,8 @@ async def chat(req: ChatRequest):
         return ChatResponse(response=response)
     except Exception as e:
         raise HTTPException(500, str(e))
+    finally:
+        _chat_inflight_lock.release()
 
 
 @app.post("/chat/stream")
@@ -160,44 +177,62 @@ async def chat_stream(req: ChatRequest):
     """SSE streaming endpoint — sends step-by-step progress events."""
     if _agent is None or _chat_executor is None:
         raise HTTPException(503, "Agent not initialized")
+    if not _chat_inflight_lock.acquire(blocking=False):
+        raise HTTPException(409, "chat in progress")
 
-    _result = {"done": False, "response": "", "error": None}
+    loop = asyncio.get_running_loop()
+    broker = ChatBroker(loop)
+    set_active_broker(broker)
+    result = {"response": "", "error": None}
 
     def _run_chat():
         try:
-            _result["response"] = _agent.chat(req.message)
+            if not broker.is_cancelled():
+                result["response"] = _agent.chat(req.message)
         except Exception as e:
-            _result["error"] = str(e)
+            result["error"] = str(e)
         finally:
-            _result["done"] = True
+            if broker.is_cancelled():
+                broker.emit({"type": "cancelled", "data": None})
+            elif result["error"]:
+                broker.emit({"type": "error", "data": result["error"]})
+            else:
+                broker.emit({"type": "response", "data": result["response"]})
+            broker.emit({"type": "done"})
 
     async def _event_generator():
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(_chat_executor, _run_chat)
-
-        last_sent = {}
-        while not _result["done"]:
-            step = get_last_step()
-            if step and step != last_sent:
-                last_sent = step.copy()
-                # Format step info as readable label for the UI
-                tool_names = step.get('tool_names', step.get('tool_calls', []))
-                step_num = step.get('step_number', step.get('step', '?'))
-                max_steps = step.get('max_steps', '?')
-                label = f"Step {step_num}/{max_steps}"
-                if tool_names:
-                    label += f": {', '.join(tool_names) if isinstance(tool_names, list) else tool_names}"
-                yield f"data: {json.dumps({'type': 'step', 'data': label})}\n\n"
-            await asyncio.sleep(0.3)
-
-        if _result["error"]:
-            yield f"data: {json.dumps({'type': 'error', 'data': _result['error']})}\n\n"
-        else:
-            # Send the response text first, then signal done
-            yield f"data: {json.dumps({'type': 'response', 'data': _result['response']})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        chat_future = loop.run_in_executor(_chat_executor, _run_chat)
+        try:
+            while True:
+                event = await broker.events.get()
+                yield f"data: {json.dumps(event)}\n\n"
+                if event.get("type") == "done":
+                    break
+            await chat_future
+        finally:
+            clear_active_broker()
+            if not chat_future.done():
+                broker.cancel()
+            _chat_inflight_lock.release()
 
     return StreamingResponse(_event_generator(), media_type="text/event-stream")
+
+
+@app.post("/chat/confirm", status_code=204)
+async def chat_confirm(req: ConfirmRequest):
+    broker = get_active_broker()
+    if broker is None or not broker.set_confirm(req.request_id, req.approved):
+        raise HTTPException(404, "confirmation request not found")
+    return Response(status_code=204)
+
+
+@app.post("/chat/cancel", status_code=204)
+async def chat_cancel():
+    broker = get_active_broker()
+    if broker is None:
+        raise HTTPException(409, "no chat running")
+    broker.cancel()
+    return Response(status_code=204)
 
 
 @app.get("/history", response_model=List[HistoryEntry])

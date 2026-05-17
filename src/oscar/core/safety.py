@@ -6,6 +6,7 @@ Low risk auto-approves; medium/high prompt yes/no; dangerous requires typing CON
 """
 
 import re
+import uuid
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
@@ -91,12 +92,37 @@ def on_before_tool_call(tool_name: str, arguments: dict) -> bool:
     Returns:
         True to allow the tool call, False to reject it.
     """
+    try:
+        from oscar.api.runtime import get_active_broker
+    except Exception:
+        broker = None
+    else:
+        broker = get_active_broker()
+
+    if broker is not None and broker.is_cancelled():
+        return False
+
     check_string = tool_name + " " + _extract_strings(arguments)
     risk = _assess_risk(tool_name, check_string)
     summary = _summarize_args(arguments)
 
     if risk == "low":
         return True
+
+    if broker is not None:
+        request_id = str(uuid.uuid4())
+        broker.emit(
+            {
+                "type": "confirm",
+                "data": {
+                    "request_id": request_id,
+                    "tool_name": tool_name,
+                    "args_summary": summary,
+                    "risk": risk,
+                },
+            }
+        )
+        return broker.wait_for_confirm(request_id, timeout=300)
 
     if risk == "medium":
         return Confirm.ask(
