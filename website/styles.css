@@ -76,6 +76,17 @@ code, kbd, pre { font-family: var(--font-mono); }
 
 .container { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--pad); }
 
+/* Grid/flex children that contain <pre>/<code> need min-width: 0 so long lines
+   scroll inside the child instead of stretching the track past the viewport. */
+.hero-grid > *,
+.cap-grid > *,
+.results-grid > *,
+.demo-grid > *,
+.stats > *,
+.author > *,
+.arch-row > *,
+.install > li > * { min-width: 0; }
+
 .skip-link {
   position: absolute; left: -9999px; top: 8px;
   background: var(--text); color: var(--bg); padding: 8px 12px;
