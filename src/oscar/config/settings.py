@@ -112,6 +112,22 @@ class OSCARSettings:
     def dry_run_mode(self) -> bool:
         return os.getenv("OSCAR_DRY_RUN", "false").lower() == "true"
 
+    @property
+    def host(self) -> str:
+        return os.getenv("OSCAR_HOST", "127.0.0.1")
+
+    @property
+    def port(self) -> int:
+        return int(os.getenv("OSCAR_PORT", "8420"))
+
+    @property
+    def cors_origin_regex(self) -> str:
+        """Regex for allowed CORS origins. Default permits localhost + vscode-webview."""
+        return os.getenv(
+            "OSCAR_CORS_ORIGIN_REGEX",
+            r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|vscode-webview://.+)$",
+        )
+
 
 # Global settings instance
 settings = OSCARSettings()

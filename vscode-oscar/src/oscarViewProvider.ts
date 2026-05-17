@@ -79,15 +79,32 @@ export class OscarViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleChat(text: string): Promise<void> {
+        let receivedAny = false;
         try {
             await this.client.chatStream(text, (event) => {
+                receivedAny = true;
                 this.postMessage({ type: "streamEvent", data: event });
             });
             this.postMessage({ type: "streamDone" });
-        } catch {
-            // Fall back to non-streaming
-            const response = await this.client.chat(text);
-            this.postMessage({ type: "chatResponse", data: response });
+        } catch (err: unknown) {
+            // Only fall back if the stream produced zero events — otherwise
+            // the agent already ran and a fallback /chat would run it twice.
+            if (receivedAny) {
+                const msg = err instanceof Error ? err.message : "Stream error";
+                this.postMessage({ type: "error", message: msg });
+                this.postMessage({ type: "streamDone" });
+                return;
+            }
+            try {
+                const response = await this.client.chat(text);
+                this.postMessage({ type: "chatResponse", data: response });
+            } catch (fallbackErr: unknown) {
+                const msg =
+                    fallbackErr instanceof Error
+                        ? fallbackErr.message
+                        : "Unknown error";
+                this.postMessage({ type: "error", message: msg });
+            }
         }
     }
 

@@ -5,12 +5,15 @@ Wraps the Asterix-based OSCAR agent for consumption by the VS Code extension.
 Start with: oscar-server  (or: uvicorn oscar.api.server:app --port 8420)
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+from oscar.config.settings import settings
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -46,15 +49,24 @@ class GitResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 _agent = None
+_chat_executor: Optional[ThreadPoolExecutor] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _agent
+    global _agent, _chat_executor
     from oscar.core.agent import get_agent
 
     _agent = get_agent()
-    yield
+    _chat_executor = ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="oscar-chat"
+    )
+    try:
+        yield
+    finally:
+        if _chat_executor is not None:
+            _chat_executor.shutdown(wait=False, cancel_futures=True)
+            _chat_executor = None
 
 
 app = FastAPI(
@@ -66,10 +78,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origin_regex=settings.cors_origin_regex,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept"],
 )
 
 
@@ -98,14 +110,13 @@ async def health():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     import asyncio
-    from concurrent.futures import ThreadPoolExecutor
 
-    if _agent is None:
+    if _agent is None or _chat_executor is None:
         raise HTTPException(503, "Agent not initialized")
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
-            ThreadPoolExecutor(max_workers=1), _agent.chat, req.message
+            _chat_executor, _agent.chat, req.message
         )
         return ChatResponse(response=response)
     except Exception as e:
@@ -117,14 +128,12 @@ async def chat_stream(req: ChatRequest):
     """SSE streaming endpoint — sends step-by-step progress events."""
     import asyncio
     import json as _json
-    from concurrent.futures import ThreadPoolExecutor
     from fastapi.responses import StreamingResponse
     from oscar.core.agent import get_last_step
 
-    if _agent is None:
+    if _agent is None or _chat_executor is None:
         raise HTTPException(503, "Agent not initialized")
 
-    _executor = ThreadPoolExecutor(max_workers=1)
     _result = {"done": False, "response": "", "error": None}
 
     def _run_chat():
@@ -137,7 +146,7 @@ async def chat_stream(req: ChatRequest):
 
     async def _event_generator():
         loop = asyncio.get_event_loop()
-        loop.run_in_executor(_executor, _run_chat)
+        loop.run_in_executor(_chat_executor, _run_chat)
 
         last_sent = {}
         while not _result["done"]:
@@ -258,11 +267,19 @@ async def status():
 # ---------------------------------------------------------------------------
 
 
-def start_server(host: str = "0.0.0.0", port: int = 8420):
-    """Start the OSCAR API server."""
+def start_server(host: Optional[str] = None, port: Optional[int] = None):
+    """Start the OSCAR API server.
+
+    Defaults bind to 127.0.0.1 (loopback only). Override via OSCAR_HOST /
+    OSCAR_PORT env vars, or by passing explicit arguments.
+    """
     import uvicorn
 
-    uvicorn.run(app, host=host, port=port)
+    uvicorn.run(
+        app,
+        host=host or settings.host,
+        port=port or settings.port,
+    )
 
 
 if __name__ == "__main__":
