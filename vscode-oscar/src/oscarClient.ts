@@ -5,7 +5,6 @@ import {
     ReviewResponse,
     HistoryResponse,
     HealthResponse,
-    MemoryResponse,
     StreamEvent,
 } from "./types";
 
@@ -111,10 +110,6 @@ export class OscarClient {
 
     async getHistory(): Promise<HistoryResponse> {
         return this.request<HistoryResponse>("/history", { method: "GET" });
-    }
-
-    async getMemory(): Promise<MemoryResponse> {
-        return this.request<MemoryResponse>("/memory", { method: "GET" });
     }
 
     async cancelChat(): Promise<void> {

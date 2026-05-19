@@ -6,7 +6,7 @@ export interface ChatRequest {
 
 export interface ChatResponse {
     response: string;
-    session_id: string;
+    session_id?: string;  // not returned by backend
 }
 
 // POST /chat/stream — SSE event payloads
@@ -54,12 +54,9 @@ export interface CompareRequest {
 }
 
 export interface CompareResponse {
-    base: string;
-    head: string;
-    summary: string;
-    commit_count: string;
-    diffstat: string;
-    commit_log: string;
+    success: boolean;
+    output: string;
+    error: string | null;
 }
 
 // POST /review
@@ -69,11 +66,9 @@ export interface ReviewRequest {
 }
 
 export interface ReviewResponse {
-    branch: string;
-    base: string;
-    summary: string;
-    diffstat: string;
-    diff: string;
+    success: boolean;
+    output: string;
+    error: string | null;
 }
 
 // GET /history
@@ -84,18 +79,6 @@ export interface HistoryEntry {
 }
 
 export type HistoryResponse = HistoryEntry[];
-
-// GET /memory
-export interface MemoryBlock {
-    name: string;
-    content: string;
-    max_tokens: number;
-    priority: number;
-}
-
-export interface MemoryResponse {
-    blocks: MemoryBlock[];
-}
 
 // Webview ↔ Extension messages
 export interface WebviewMessage {
