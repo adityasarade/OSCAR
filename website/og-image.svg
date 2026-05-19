@@ -28,7 +28,7 @@
     <path d="M19 33 L29 43 L48 24" fill="none" stroke="url(#accent)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <text x="160" y="138" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="28" fill="#f4f4f5">OSCAR</text>
-  <text x="160" y="170" font-family="JetBrains Mono, monospace" font-size="14" fill="#9ca3af">v0.3.0 · MIT</text>
+  <text x="160" y="170" font-family="JetBrains Mono, monospace" font-size="14" fill="#9ca3af">v0.4.0 · MIT</text>
 
   <!-- headline -->
   <text x="80" y="320" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="68" fill="#f4f4f5" letter-spacing="-2">A GitHub-specialized</text>
