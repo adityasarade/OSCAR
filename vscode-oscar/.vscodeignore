@@ -5,3 +5,6 @@ tsconfig.json
 **/*.ts
 **/*.map
 .gitignore
+
+data/**
+.ruff_cache/**
