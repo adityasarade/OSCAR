@@ -428,7 +428,7 @@ code, kbd, pre { font-family: var(--font-mono); }
 /* ---------- results ---------- */
 .results-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
 }
 @media (max-width: 900px) { .results-grid { grid-template-columns: 1fr; } }

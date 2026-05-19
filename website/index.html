@@ -147,10 +147,10 @@ Summary
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="stat-n">2,163</div><div class="stat-l">lines of Python</div></div>
-      <div class="stat"><div class="stat-n">13</div><div class="stat-l">tools registered</div></div>
-      <div class="stat"><div class="stat-n">11</div><div class="stat-l">API endpoints</div></div>
-      <div class="stat"><div class="stat-n">3-tier</div><div class="stat-l">safety model</div></div>
+      <div class="stat"><div class="stat-n">2,308</div><div class="stat-l">lines of Python</div></div>
+      <div class="stat"><div class="stat-n">15</div><div class="stat-l">tools registered</div></div>
+      <div class="stat"><div class="stat-n">12</div><div class="stat-l">API endpoints</div></div>
+      <div class="stat"><div class="stat-n">100%</div><div class="stat-l">safety-classifier accuracy</div></div>
       <div class="stat"><div class="stat-n">MIT</div><div class="stat-l">licensed</div></div>
     </div>
   </div>
@@ -183,10 +183,11 @@ Summary
         <span class="arch-label">Transport</span>
         <div class="arch-card">
           <h3>FastAPI server <small>Python</small></h3>
-          <p>11 endpoints — <code>/chat</code>, <code>/chat/stream</code>, <code>/branches</code>, <code>/compare</code>, <code>/review</code>, <code>/history</code>, <code>/memory</code>, <code>/status</code>, plus confirm/cancel and health</p>
+          <p>12 endpoints — <code>/chat</code>, <code>/chat/stream</code>, <code>/branches</code>, <code>/compare</code>, <code>/review</code>, <code>/history</code>, <code>/memory</code>, <code>/metrics</code>, <code>/status</code>, plus confirm/cancel and health</p>
           <ul class="arch-bullets">
             <li>SSE for token-level streaming</li>
             <li>broker pattern for confirmation gates</li>
+            <li><code>/metrics</code> surfaces Gemini latency, tokens, and audit-log aggregates</li>
           </ul>
         </div>
       </div>
@@ -310,7 +311,7 @@ Summary
     <header class="section-head">
       <span class="kicker">03 · Results</span>
       <h2>Measured, not marketed.</h2>
-      <p>The numbers below are read directly from the repository at <code>v0.3.0</code>. They are not benchmarks against external systems — they describe OSCAR's surface area and operational characteristics.</p>
+      <p>Two kinds of numbers below: <em>surface area</em> read straight from the repository at <code>v0.3.0</code>, and <em>evaluation</em> numbers from the in-repo bench harness at <code>bench/run_bench.py</code>. The eval is scoped to what OSCAR actually does — not SWE-bench-style end-to-end patching, which is out of scope.</p>
     </header>
 
     <div class="results-grid">
@@ -318,26 +319,40 @@ Summary
         <div class="result-h">Surface area</div>
         <table class="result-table">
           <tbody>
-            <tr><th>Backend (Python)</th><td>2,163 LOC</td></tr>
-            <tr><th>Git tools</th><td>9 functions</td></tr>
-            <tr><th>Browser tools</th><td>4 functions</td></tr>
-            <tr><th>HTTP endpoints</th><td>11</td></tr>
-            <tr><th>VS Code modules</th><td>4 (.ts)</td></tr>
-            <tr><th>Test functions</th><td>14 across 3 suites</td></tr>
+            <tr><th>Backend (Python)</th><td>2,308 LOC</td></tr>
+            <tr><th>Tools registered</th><td>15 (9 git · 4 browser · 1 shell · 1 web search)</td></tr>
+            <tr><th>HTTP endpoints</th><td>12</td></tr>
+            <tr><th>SSE event types</th><td>6 (<code>step</code>, <code>confirm</code>, <code>response</code>, <code>error</code>, <code>cancelled</code>, <code>done</code>)</td></tr>
+            <tr><th>VS Code modules</th><td>4 (.ts, 508 LOC)</td></tr>
+            <tr><th>Test functions</th><td>15 across 3 suites</td></tr>
           </tbody>
         </table>
       </div>
 
       <div class="result-card">
-        <div class="result-h">Safety classifier</div>
+        <div class="result-h">T4 — Safety classifier</div>
         <table class="result-table">
           <tbody>
-            <tr><th>Low risk</th><td>read-only git, web search, status</td></tr>
-            <tr><th>Medium risk</th><td>shell, checkout, browser navigate</td></tr>
-            <tr><th>High risk</th><td>commit, push, destructive ops</td></tr>
-            <tr><th>Confirmation</th><td>broker over SSE · typed <code>CONFIRM</code></td></tr>
+            <tr><th>Labelled cases</th><td>20</td></tr>
+            <tr><th>Overall accuracy</th><td><strong>100% (20/20)</strong></td></tr>
+            <tr><th>Dangerous tier</th><td>P 1.00 · R 1.00 · 5 cases</td></tr>
+            <tr><th>High tier</th><td>P 1.00 · R 1.00 · 4 cases</td></tr>
+            <tr><th>Medium tier</th><td>P 1.00 · R 1.00 · 5 cases</td></tr>
+            <tr><th>Low tier</th><td>P 1.00 · R 1.00 · 6 cases</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="result-card">
+        <div class="result-h">Safety model</div>
+        <table class="result-table">
+          <tbody>
+            <tr><th>Risk tiers</th><td>4 — low / medium / high / dangerous</td></tr>
+            <tr><th>Dangerous regexes</th><td>8 patterns</td></tr>
+            <tr><th>Shell allowlist</th><td>22 safe commands</td></tr>
+            <tr><th>Confirmation</th><td>broker over SSE · typed <code>CONFIRM</code> for dangerous</td></tr>
+            <tr><th>Audit</th><td>JSONL · <code>risk</code> + <code>approved</code> + <code>latency_ms</code> per call</td></tr>
             <tr><th>Bypass</th><td>none in production code path</td></tr>
-            <tr><th>Audit</th><td><code>on_after_tool_call</code> → JSONL log</td></tr>
           </tbody>
         </table>
       </div>
@@ -347,22 +362,35 @@ Summary
         <table class="result-table">
           <tbody>
             <tr><th>Primary LLM</th><td>Gemini 2.5 Flash · Vertex AI</td></tr>
-            <tr><th>Fallback LLM</th><td>Groq (configurable)</td></tr>
             <tr><th>Auth</th><td>Application Default Credentials</td></tr>
             <tr><th>Streaming</th><td>Server-Sent Events</td></tr>
-            <tr><th>Python</th><td>≥ 3.10 (tested 3.10–3.13)</td></tr>
+            <tr><th>Python</th><td>≥ 3.10 · CI matrix 3.10/3.11/3.12</td></tr>
+            <tr><th>Memory budget</th><td>3 Asterix blocks · 8,000 tokens</td></tr>
             <tr><th>License</th><td>MIT</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="result-card">
+        <div class="result-h">Live telemetry · <code>GET /metrics</code></div>
+        <table class="result-table">
+          <tbody>
+            <tr><th>LLM latency</th><td>mean ms per Gemini call (running total)</td></tr>
+            <tr><th>Token usage</th><td>cumulative input + output tokens per provider</td></tr>
+            <tr><th>Tool distribution</th><td>per-tool call count from <code>audit.jsonl</code></td></tr>
+            <tr><th>Risk histogram</th><td>low / medium / high / dangerous · per-call</td></tr>
+            <tr><th>Gate firing rate</th><td>approved vs. rejected by safety classifier</td></tr>
+            <tr><th>Per-call latency</th><td>tool-execution ms · mean · median · p95 · max</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
     <div class="callout">
-      <strong>Reproducing the numbers:</strong>
-      <code>cloc src/oscar</code>, <code>grep -r "@agent.tool" src/oscar</code>,
-      <code>grep -E "^@app\.(get|post)" src/oscar/api/server.py</code>,
-      and <code>grep -c "^def test_" tests/test_*.py</code>.
-      The Python source totals 2,163 lines across tools, core, and api.
+      <strong>Reproducing the bench:</strong>
+      <code>python bench/run_bench.py --offline</code> runs the T4 safety track without LLM credentials.
+      <code>python bench/run_bench.py</code> additionally runs T3 (tool selection accuracy) and T5 (latency + token + cost) once Vertex AI is authenticated.
+      Each run writes <code>bench/results/&lt;UTC&gt;/summary.json</code>.
     </div>
   </div>
 </section>
