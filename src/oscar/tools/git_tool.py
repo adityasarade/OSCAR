@@ -243,7 +243,7 @@ def git_branches() -> str:
     branches = []
     for raw_line in result.stdout.splitlines():
         branch = raw_line.strip()
-        if not branch or branch == "origin/HEAD":
+        if not branch or branch in ("origin", "origin/HEAD"):
             continue
         if branch.startswith("origin/"):
             display = f"remotes/{branch}"
