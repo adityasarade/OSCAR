@@ -1,0 +1,67 @@
+flowchart TB
+  User([Developer])
+
+  subgraph VSCode["VS Code Extension (TypeScript)"]
+    direction TB
+    Sidebar["Sidebar WebviewView<br/>(chat UI + branch picker)"]
+    Client["OscarClient<br/>(fetch + SSE reader)"]
+    Sidebar --> Client
+  end
+
+  subgraph FastAPI["FastAPI Server  ·  localhost:8420"]
+    direction TB
+    Endpoints["Endpoints<br/>/chat  ·  /chat/stream<br/>/chat/confirm  ·  /chat/cancel<br/>/branches  ·  /compare  ·  /review<br/>/history  ·  /memory  ·  /status  ·  /health"]
+    Broker["ChatBroker<br/>(asyncio queue · confirm · cancel)"]
+    Endpoints --> Broker
+  end
+
+  subgraph Agent["OSCAR Agent  (Asterix-powered)"]
+    direction TB
+    Loop["ReAct loop<br/>reason → tool → observe"]
+    Memory["Memory blocks<br/>session_context ·<br/>knowledge_base ·<br/>user_preferences"]
+    Patch["asterix_patch<br/>Vertex AI / Gemini bridge"]
+    Safety["Safety gate<br/>on_before_tool_call<br/>(low / medium / high / dangerous)"]
+    Audit["Audit logger<br/>(JSONL trail)"]
+    Loop --> Memory
+    Loop --> Safety
+    Loop --> Audit
+    Loop --> Patch
+  end
+
+  subgraph Tools["Tools  (@agent.tool)"]
+    direction LR
+    Git["git_tool<br/>status · compare · review<br/>log · diff · branches<br/>checkout · commit · push"]
+    Shell["shell<br/>(allow-listed subprocess)"]
+    Web["web_search<br/>(Tavily, dual-key fallback)"]
+    Browser["browser<br/>(Playwright, headless)"]
+  end
+
+  subgraph External["External services & storage"]
+    direction LR
+    Gemini[("Gemini 2.5 Flash<br/>Vertex AI · ADC auth")]
+    Tavily[("Tavily API")]
+    Chromium[("Chromium<br/>via Playwright")]
+    GitRepo[("Local Git<br/>repository")]
+    Logs[("data/logs/<br/>audit.jsonl")]
+  end
+
+  User -->|prompt · approve · cancel| Sidebar
+  Client -->|HTTP + SSE| Endpoints
+  Endpoints -->|agent.chat| Loop
+  Patch -->|generate_content| Gemini
+  Safety -.->|confirm event| Broker
+  Broker -.->|step · response · done · error| Client
+  Loop --> Git
+  Loop --> Shell
+  Loop --> Web
+  Loop --> Browser
+  Git --> GitRepo
+  Shell --> GitRepo
+  Web --> Tavily
+  Browser --> Chromium
+  Audit --> Logs
+
+  classDef layer fill:#eef5ff,stroke:#3a6ea5,color:#0b2a4a;
+  classDef ext   fill:#fff3cd,stroke:#8a6d3b,color:#3b2e09;
+  class VSCode,FastAPI,Agent,Tools layer;
+  class External ext;

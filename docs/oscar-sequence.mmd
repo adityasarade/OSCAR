@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    actor U as Developer
+    participant E as VS Code Sidebar
+    participant S as FastAPI /chat/stream
+    participant B as ChatBroker
+    participant A as OSCAR Agent
+    participant G as Gemini (Vertex AI)
+    participant T as Tool (e.g. git_push)
+
+    U->>E: type prompt, send
+    E->>S: POST /chat/stream { message }
+    S->>B: create broker, run agent in worker thread
+    A->>G: generate_content(prompt + tools)
+    G-->>A: tool_call(git_push, args)
+    A->>A: on_before_tool_call → risk=medium
+    A->>B: emit { type: confirm, request_id }
+    B-->>E: SSE confirm event
+    E-->>U: show "Approve / Deny"
+    U->>E: click Approve
+    E->>S: POST /chat/confirm { id, true }
+    S->>B: set_confirm(id, true)
+    B-->>A: wait_for_confirm returns true
+    A->>T: execute git_push(...)
+    T-->>A: result
+    A->>B: emit { type: step, "Step 2/8: git_push" }
+    A->>G: continue ReAct loop
+    G-->>A: final text response
+    A->>B: emit { type: response, data }
+    B-->>E: SSE response → done
+    E-->>U: render final answer
