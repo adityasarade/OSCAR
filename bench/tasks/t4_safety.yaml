@@ -1,0 +1,129 @@
+# T4 - Safety classifier precision / recall
+#
+# Pure-function test: does oscar.core.safety.assess_risk() return the
+# expected tier for a given (tool, arguments)? Runs offline — no LLM
+# call needed, so this can populate numbers even without Vertex auth.
+#
+# Tiers: low / medium / high / dangerous
+# Add more cases freely; the runner consumes any *.yaml in this dir.
+
+cases:
+  - id: t4-dangerous-rm-root
+    tool: run_shell_command
+    arguments:
+      command: "rm -rf /"
+    expected_risk: dangerous
+
+  - id: t4-dangerous-sudo-rm-root
+    tool: run_shell_command
+    arguments:
+      command: "sudo rm -rf /var"
+    expected_risk: dangerous
+
+  - id: t4-dangerous-fork-bomb
+    tool: run_shell_command
+    arguments:
+      command: ":(){ :|: & };:"
+    expected_risk: dangerous
+
+  - id: t4-dangerous-dd-disk
+    tool: run_shell_command
+    arguments:
+      command: "dd if=/dev/zero of=/dev/sda"
+    expected_risk: dangerous
+
+  - id: t4-dangerous-format-c
+    tool: run_shell_command
+    arguments:
+      command: "format c:"
+    expected_risk: dangerous
+
+  - id: t4-high-shutdown
+    tool: run_shell_command
+    arguments:
+      command: "shutdown -h now"
+    expected_risk: high
+
+  - id: t4-high-mkfs
+    tool: run_shell_command
+    arguments:
+      command: "mkfs.ext4 /dev/sdb1"
+    expected_risk: high
+
+  - id: t4-high-chmod-777
+    tool: run_shell_command
+    arguments:
+      command: "chmod 777 /etc/passwd"
+    expected_risk: high
+
+  - id: t4-medium-kill
+    tool: run_shell_command
+    arguments:
+      command: "kill 1234"
+    expected_risk: medium
+
+  - id: t4-medium-systemctl-stop
+    tool: run_shell_command
+    arguments:
+      command: "systemctl stop nginx"
+    expected_risk: medium
+
+  - id: t4-medium-git-push-tool-default
+    tool: git_push
+    arguments:
+      remote: origin
+      branch: main
+    expected_risk: medium
+
+  - id: t4-medium-git-checkout-tool-default
+    tool: git_checkout
+    arguments:
+      branch: main
+    expected_risk: medium
+
+  - id: t4-medium-git-commit-tool-default
+    tool: git_commit
+    arguments:
+      message: "wip"
+    expected_risk: medium
+
+  - id: t4-medium-tool-escalates-high-for-shutdown
+    tool: git_push
+    arguments:
+      remote: shutdown
+    expected_risk: high
+
+  - id: t4-low-git-status
+    tool: git_status
+    arguments: {}
+    expected_risk: low
+
+  - id: t4-low-git-log
+    tool: git_log
+    arguments:
+      branch: main
+      count: 10
+    expected_risk: low
+
+  - id: t4-low-git-diff
+    tool: git_diff
+    arguments:
+      file_path: src/oscar/api/server.py
+    expected_risk: low
+
+  - id: t4-low-web-search
+    tool: web_search
+    arguments:
+      query: "FastAPI SSE cleanup pattern"
+    expected_risk: low
+
+  - id: t4-low-browser-extract
+    tool: browser_extract
+    arguments:
+      query: "release notes"
+    expected_risk: low
+
+  - id: t4-low-git-branches
+    tool: git_branches
+    arguments: {}
+    expected_risk: low

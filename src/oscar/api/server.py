@@ -28,6 +28,7 @@ from oscar.api.runtime import (
     set_active_broker,
 )
 from oscar.core.agent import get_agent
+from oscar.core import metrics as metrics_mod
 from oscar.logging_config import configure_logging
 from oscar.tools.git_tool import (
     git_branches,
@@ -327,6 +328,14 @@ async def memory():
         }
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.get("/metrics")
+async def metrics():
+    return {
+        "llm": metrics_mod.llm_performance(),
+        "audit": metrics_mod.summarize_audit_log(),
+    }
 
 
 @app.get("/status")

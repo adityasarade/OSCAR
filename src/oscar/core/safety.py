@@ -46,6 +46,16 @@ def _summarize_args(arguments: dict) -> str:
     return summary
 
 
+def assess_risk(tool_name: str, arguments: dict) -> str:
+    """Classify a tool call into one of low/medium/high/dangerous.
+
+    Public wrapper around _assess_risk; used by audit logging and the
+    bench harness so they don't duplicate the classifier logic.
+    """
+    check_string = tool_name + " " + _extract_strings(arguments)
+    return _assess_risk(tool_name, check_string)
+
+
 def _assess_risk(tool_name: str, check_string: str) -> str:
     """Assess the risk level of a tool call.
 

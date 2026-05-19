@@ -1,0 +1,52 @@
+# T3 - Tool selection accuracy
+#
+# Each case is a natural-language prompt; expected_tools is the SET of
+# tools the agent should call to answer it. The runner asks the agent
+# (so Vertex AI auth is required) and compares the captured tool calls.
+#
+# Scoring:
+#   - exact_match: True iff the called set equals expected_tools
+#   - jaccard:    |called ∩ expected| / |called ∪ expected|
+#
+# Use --offline to skip this file when you don't have credentials.
+
+cases:
+  - id: t3-status
+    prompt: "Show me the current git status."
+    expected_tools: ["git_status"]
+
+  - id: t3-branches
+    prompt: "List all the branches in this repository."
+    expected_tools: ["git_branches"]
+
+  - id: t3-compare
+    prompt: "Compare main and feature-branch."
+    expected_tools: ["git_compare"]
+
+  - id: t3-review
+    prompt: "Review the changes on dev against main."
+    expected_tools: ["git_review"]
+
+  - id: t3-log
+    prompt: "Show me the last 5 commits on main."
+    expected_tools: ["git_log"]
+
+  - id: t3-diff-file
+    prompt: "Show me the diff for src/oscar/api/server.py."
+    expected_tools: ["git_diff"]
+
+  - id: t3-checkout
+    prompt: "Switch to the main branch."
+    expected_tools: ["git_checkout"]
+
+  - id: t3-web-search
+    prompt: "Search the web for FastAPI SSE cleanup patterns."
+    expected_tools: ["web_search"]
+
+  - id: t3-shell
+    prompt: "Run 'ls -la' in the current directory."
+    expected_tools: ["run_shell_command"]
+
+  - id: t3-browser-navigate
+    prompt: "Open https://fastapi.tiangolo.com and tell me what's on the page."
+    expected_tools: ["browser_navigate"]

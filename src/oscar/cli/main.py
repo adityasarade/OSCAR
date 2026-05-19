@@ -214,25 +214,80 @@ def audit(tail):
     table = Table(title="OSCAR Audit Log")
     table.add_column("Timestamp")
     table.add_column("Tool")
+    table.add_column("Risk")
+    table.add_column("OK")
     table.add_column("Arguments")
 
     for row in rows:
         try:
             entry = json.loads(row)
             arguments = json.dumps(entry.get("arguments", {}))
+            approved = entry.get("approved")
+            approved_cell = "" if approved is None else ("y" if approved else "n")
             table.add_row(
                 str(entry.get("timestamp", "")),
                 str(entry.get("tool", "")),
+                str(entry.get("risk", "")),
+                approved_cell,
                 arguments,
             )
         except json.JSONDecodeError:
-            table.add_row("", "", row.strip())
+            table.add_row("", "", "", "", row.strip())
 
     if not rows:
         console.print(f"[dim]No audit entries found at {audit_path}[/dim]")
         return
 
     console.print(table)
+
+
+@main.command("metrics")
+def metrics():
+    """Summarize the audit log: tool counts, risk distribution, latency."""
+    from oscar.core.metrics import summarize_audit_log, audit_path
+
+    summary = summarize_audit_log()
+    path = audit_path()
+    if summary["entries"] == 0:
+        console.print(f"[dim]No audit entries found at {path}[/dim]")
+        return
+
+    console.print(f"[bold]Audit summary[/bold]  [dim]{path}[/dim]")
+    console.print(f"  entries:    [cyan]{summary['entries']}[/cyan]")
+    console.print(
+        f"  approved:   [green]{summary['approved']}[/green]   "
+        f"rejected: [red]{summary['rejected']}[/red]"
+    )
+
+    risk_table = Table(title="Risk distribution", show_header=False)
+    risk_table.add_column("tier")
+    risk_table.add_column("count", justify="right")
+    for tier, count in summary["by_risk"].items():
+        if count == 0:
+            continue
+        risk_table.add_row(tier, str(count))
+    console.print(risk_table)
+
+    tool_table = Table(title="Per-tool calls", show_header=False)
+    tool_table.add_column("tool")
+    tool_table.add_column("calls", justify="right")
+    for tool, count in sorted(
+        summary["by_tool"].items(), key=lambda kv: kv[1], reverse=True
+    ):
+        tool_table.add_row(tool, str(count))
+    console.print(tool_table)
+
+    latency = summary.get("latency_ms")
+    if latency:
+        console.print(
+            f"[bold]Latency (ms)[/bold] over {latency['count']} sampled calls: "
+            f"mean={latency['mean']}  median={latency['median']}  "
+            f"p95={latency['p95']}  max={latency['max']}"
+        )
+    else:
+        console.print(
+            "[dim]No latency samples — run the agent on real tool calls to populate them.[/dim]"
+        )
 
 
 if __name__ == "__main__":

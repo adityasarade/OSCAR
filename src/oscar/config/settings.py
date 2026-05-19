@@ -97,9 +97,9 @@ SAFETY_PATTERNS = {
     "dangerous_commands": [
         r"\brm\s+-rf\s+/.*",               # Remove root dir
         r"\bdel\s+/s\s+/q\b",              # Windows delete
-        r"\bformat\s+c:\b",                # Format drive
+        r"\bformat\s+[a-zA-Z]:",           # Format drive (any drive letter, no trailing \b — `:` is non-word)
         r"\bdd\s+if=.*",                   # Disk overwrite
-        r":\(\)\s*\{\s*:\|\s*:\s*;\s*\}\s*;",  # Fork bomb
+        r":\s*\(\s*\)\s*\{[^}]*:\s*\|\s*:[^}]*\}\s*;",  # Fork bomb (any body between { and })
         r"\bsudo\s+rm\s+-rf\s+/.*",        # Sudo rm -rf /
         r"\bdiskpart\b",                   # Diskpart tool
         r"\bfdisk\b"                       # fdisk tool

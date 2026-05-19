@@ -1,0 +1,26 @@
+# T1 - Branch comparison correctness  (STUB)
+#
+# Status: scaffold only. Populate with real fixture repos before relying
+# on the numbers. The runner already wires this in; you just need cases.
+#
+# How to add a case:
+#   1. Pick a repo path (absolute, on your machine).
+#   2. Pick a base ref and a head ref that exist in that repo.
+#   3. List the files you expect git_compare(base, head) to mention. The
+#      runner will check whether each expected file appears as a substring
+#      in the agent's text output.
+#
+# Scoring:
+#   - precision: |output ∩ expected| / |output| where output is the set of
+#     files that appear in the compare summary.
+#   - recall:    |output ∩ expected| / |expected|
+
+cases: []
+  # Example (uncomment and adapt):
+  # - id: t1-oscar-main-vs-prev
+  #   repo: /Users/aditya.sarade/Desktop/OSCAR
+  #   base: HEAD~5
+  #   head: HEAD
+  #   expected_files:
+  #     - src/oscar/core/agent.py
+  #     - src/oscar/api/server.py

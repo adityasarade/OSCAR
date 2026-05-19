@@ -11,6 +11,7 @@ Usage:
 
 import json
 import logging
+import time
 from logging.handlers import RotatingFileHandler
 import platform
 from datetime import datetime
@@ -23,7 +24,7 @@ import oscar.core.asterix_patch  # noqa: F401
 from asterix import Agent, BlockConfig
 
 from oscar.config.prompts import SYSTEM_PROMPT
-from oscar.core.safety import on_before_tool_call
+from oscar.core.safety import assess_risk, on_before_tool_call
 from oscar.config.settings import settings
 
 # Tool imports
@@ -66,14 +67,30 @@ if not any(
     _audit_logger.addHandler(_audit_handler)
 
 
-def _audit_log(tool_name: str, arguments: dict) -> None:
-    """Append tool call to JSONL audit trail."""
+def _audit_log(
+    tool_name: str,
+    arguments: dict,
+    *,
+    risk: str = "unknown",
+    approved: bool = True,
+    latency_ms: float | None = None,
+) -> None:
+    """Append tool call to JSONL audit trail.
+
+    risk/approved/latency_ms are captured so /metrics and the bench
+    harness can compute gate-firing, rejection rate, and per-tool latency
+    without re-running the classifier.
+    """
     try:
         entry = {
             "timestamp": datetime.now().isoformat(),
             "tool": tool_name,
             "arguments": {k: str(v)[:200] for k, v in arguments.items()},
+            "risk": risk,
+            "approved": approved,
         }
+        if latency_ms is not None:
+            entry["latency_ms"] = round(latency_ms, 2)
         _audit_logger.info(json.dumps(entry))
     except Exception as e:
         logger.debug("Failed to write audit log entry: %s", e)
@@ -176,7 +193,7 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
             except (json.JSONDecodeError, TypeError):
                 arguments = {}
 
-            # Safety gate
+            risk = assess_risk(tool_name, arguments)
             approved = on_before_tool_call(tool_name, arguments)
             if not approved:
                 logger.warning("Rejected tool call: %s", tool_name)
@@ -186,10 +203,10 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
                     "name": tool_name,
                     "content": "Tool execution was rejected by user.",
                 })
-                _audit_log(tool_name, {"_status": "rejected", **arguments})
+                _audit_log(tool_name, arguments, risk=risk, approved=False)
                 continue
 
-            # Execute via original registry
+            tool_started = time.perf_counter()
             try:
                 tool_result = agent._tool_registry.execute_tool(tool_name, **arguments)
                 logger.info("Completed tool call: %s", tool_name)
@@ -209,8 +226,14 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
                     "content": f"Error: {e}",
                 })
 
-            # Audit log
-            _audit_log(tool_name, arguments)
+            latency_ms = (time.perf_counter() - tool_started) * 1000
+            _audit_log(
+                tool_name,
+                arguments,
+                risk=risk,
+                approved=True,
+                latency_ms=latency_ms,
+            )
 
         return results
 
