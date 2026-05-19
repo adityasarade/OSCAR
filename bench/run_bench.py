@@ -159,8 +159,15 @@ def run_t3_tool_selection(quiet: bool) -> TrackResult:
         track.aggregate = {"skipped": "no cases"}
         return track
 
+    from oscar.core import agent as agent_mod
     from oscar.core.agent import get_agent
     from oscar.core.metrics import audit_path, llm_performance
+
+    # Bench mode auto-approves so we measure tool *selection*, not the
+    # interactive safety gate (which would default-reject without stdin).
+    # agent_mod has its own binding from `from oscar.core.safety import ...`
+    # so we override the binding it uses.
+    agent_mod.on_before_tool_call = lambda tool_name, arguments: True
 
     audit_file = audit_path()
     audit_file.parent.mkdir(parents=True, exist_ok=True)

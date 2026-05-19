@@ -20,11 +20,11 @@ cases:
     expected_tools: ["git_branches"]
 
   - id: t3-compare
-    prompt: "Compare main and feature-branch."
+    prompt: "Compare main and aurelia."
     expected_tools: ["git_compare"]
 
   - id: t3-review
-    prompt: "Review the changes on dev against main."
+    prompt: "Review the changes on aurelia against main."
     expected_tools: ["git_review"]
 
   - id: t3-log
