@@ -300,9 +300,9 @@ async def branches():
 async def compare(req: CompareRequest):
     output = git_compare(req.base, req.head)
     return GitResponse(
-        success=not output.startswith("Error"),
+        success="Error:" not in output,
         output=output,
-        error=output if output.startswith("Error") else None,
+        error=output if "Error:" in output else None,
     )
 
 
@@ -310,9 +310,9 @@ async def compare(req: CompareRequest):
 async def review(req: ReviewRequest):
     output = git_review(req.branch, req.base)
     return GitResponse(
-        success=not output.startswith("Error"),
+        success="Error:" not in output,
         output=output,
-        error=output if output.startswith("Error") else None,
+        error=output if "Error:" in output else None,
     )
 
 
