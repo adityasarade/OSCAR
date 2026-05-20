@@ -3,6 +3,7 @@ OSCAR CLI — GitHub-Specialized AI Coding Assistant
 """
 
 import click
+import importlib.metadata
 import json
 import sys
 import os
@@ -19,6 +20,11 @@ from oscar.core.repo_context import set_active_repo, get_active_repo, is_git_rep
 from oscar.logging_config import configure_logging
 
 console = Console()
+
+try:
+    OSCAR_VERSION = importlib.metadata.version("oscar-agent")
+except importlib.metadata.PackageNotFoundError:
+    OSCAR_VERSION = "unknown"
 
 
 def display_welcome():
@@ -223,6 +229,7 @@ def _tail_lines(path: Path, count: int) -> list[str]:
 
 
 @click.group(invoke_without_command=True)
+@click.version_option(OSCAR_VERSION, "-V", "--version", prog_name="oscar")
 @click.pass_context
 @click.option("--debug", is_flag=True, help="Enable debug mode")
 @click.option("--config-check", is_flag=True, help="Check configuration and exit")
