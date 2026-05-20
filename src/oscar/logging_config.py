@@ -21,13 +21,21 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload)
 
 
-def configure_logging() -> None:
-    """Configure process logging with OSCAR's JSON formatter."""
-    level_name = os.getenv("OSCAR_LOG_LEVEL", "INFO").upper()
-    level = getattr(logging, level_name, logging.INFO)
+def configure_logging(
+    level: str | None = None, default_level: str = "INFO"
+) -> None:
+    """Configure process logging with OSCAR's JSON formatter.
+
+    Precedence: explicit `level` arg > OSCAR_LOG_LEVEL env var > default_level.
+    """
+    if level is not None:
+        level_name = level.upper()
+    else:
+        level_name = os.getenv("OSCAR_LOG_LEVEL", default_level).upper()
+    resolved = getattr(logging, level_name, logging.INFO)
 
     root_logger = logging.getLogger()
-    root_logger.setLevel(level)
+    root_logger.setLevel(resolved)
 
     handler = next(
         (
@@ -42,5 +50,5 @@ def configure_logging() -> None:
         handler._oscar_json_handler = True
         root_logger.addHandler(handler)
 
-    handler.setLevel(level)
+    handler.setLevel(resolved)
     handler.setFormatter(JsonFormatter())

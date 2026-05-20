@@ -149,7 +149,7 @@ def main(ctx, debug, config_check):
     if debug:
         os.environ["OSCAR_DEBUG"] = "true"
 
-    configure_logging()
+    configure_logging(level="DEBUG" if debug else "WARNING")
 
     if ctx.invoked_subcommand is not None:
         return
