@@ -75,6 +75,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/oscar"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/oscar",
+    "README.md",
+    "pyproject.toml",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
