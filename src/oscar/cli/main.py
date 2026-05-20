@@ -15,6 +15,7 @@ from rich.text import Text
 from rich.markdown import Markdown
 
 from oscar.config.settings import settings
+from oscar.core.repo_context import set_active_repo, get_active_repo, is_git_repo
 from oscar.logging_config import configure_logging
 
 console = Console()
@@ -29,10 +30,13 @@ def display_welcome():
     panel = Panel(welcome_text, title="Welcome", border_style="blue", padding=(1, 2))
     console.print(panel)
 
-    config_info = """
-    [bold]Powered by:[/bold] Asterix + Gemini 2.5 Flash (Vertex AI)
-    [dim]Type 'help' for commands or describe what you want to do...[/dim]
-    """
+    repo = get_active_repo() or os.getcwd()
+    config_info = (
+        "\n    [bold]Powered by:[/bold] Asterix + Gemini 2.5 Flash (Vertex AI)\n"
+        f"    [bold]Repo:[/bold] [cyan]{repo}[/cyan]"
+        + ("" if is_git_repo(repo) else "  [yellow](not a git repo)[/yellow]")
+        + "\n    [dim]Type 'help' for commands or describe what you want to do...[/dim]\n"
+    )
     console.print(config_info)
 
 
@@ -42,6 +46,7 @@ def display_help():
     [bold]Commands:[/bold]
     [cyan]help[/cyan] or [cyan]?[/cyan]    Show this help
     [cyan]config[/cyan]       Show configuration
+    [cyan]repo[/cyan]         Show or set the active repository
     [cyan]test[/cyan]         Test LLM connection
     [cyan]serve[/cyan]        Start the API server (port 8420)
     [cyan]quit[/cyan]         Exit OSCAR
@@ -69,6 +74,7 @@ def show_config():
     agent = get_agent()
     tool_count = len(agent.get_all_tools())
     block_names = list(agent.blocks.keys())
+    repo = get_active_repo() or "(default cwd)"
 
     config_details = f"""
     [bold]OSCAR Configuration:[/bold]
@@ -78,10 +84,40 @@ def show_config():
     Tools: [green]{tool_count}[/green] registered
     Memory blocks: [green]{', '.join(block_names)}[/green]
 
+    [bold]Repository:[/bold]
+    Active repo: [cyan]{repo}[/cyan]
+
     [bold]Directories:[/bold]
     Data: [dim]{Path('./data').resolve()}[/dim]
     """
     console.print(config_details)
+
+
+def handle_repo_command(rest: str) -> None:
+    """`repo` — show; `repo <path>` — set; `repo clear` — unset."""
+    arg = rest.strip()
+    if not arg:
+        active = get_active_repo()
+        if active:
+            console.print(f"[bold]Active repo:[/bold] [cyan]{active}[/cyan]")
+            if not is_git_repo(active):
+                console.print("[yellow]Note: this path is not inside a git work tree.[/yellow]")
+        else:
+            console.print(f"[dim]No explicit repo set. Using cwd: {os.getcwd()}[/dim]")
+        return
+
+    if arg.lower() == "clear":
+        set_active_repo(None)
+        console.print("[green]Cleared active repo.[/green]")
+        return
+
+    resolved = set_active_repo(arg)
+    if resolved is None:
+        console.print(f"[red]Could not resolve path: {arg}[/red]")
+        return
+    console.print(f"[green]Active repo set to:[/green] [cyan]{resolved}[/cyan]")
+    if not is_git_repo(resolved):
+        console.print("[yellow]Warning: this directory is not inside a git work tree.[/yellow]")
 
 
 def test_llm_connection():
@@ -97,15 +133,62 @@ def test_llm_connection():
         console.print(f"[red]FAIL[/red] {e}")
 
 
+def _render_tool_call(tool_name: str, args_summary: str, risk: str) -> None:
+    risk_color = {
+        "low": "dim",
+        "medium": "yellow",
+        "high": "bold yellow",
+        "dangerous": "bold red",
+    }.get(risk, "dim")
+    args_text = f" [dim]{args_summary}[/dim]" if args_summary else ""
+    risk_tag = f" [{risk_color}]({risk})[/{risk_color}]" if risk and risk != "low" else ""
+    console.print(f"  [bold cyan]›[/bold cyan] [cyan]{tool_name}[/cyan]{risk_tag}{args_text}")
+
+
+def _render_tool_result(tool_name: str, snippet: str, ok: bool) -> None:
+    symbol = "[green]✓[/green]" if ok else "[red]✗[/red]"
+    if snippet:
+        console.print(f"    {symbol} [dim]{snippet}[/dim]")
+    else:
+        console.print(f"    {symbol} [dim]({tool_name} done)[/dim]")
+
+
 def process_user_request(user_input: str):
-    """Process natural language request through the Asterix agent."""
+    """Process natural language request through the Asterix agent.
+
+    Streams a compact view of the agent's tool usage to the console while it
+    works, then prints the final markdown response.
+    """
     try:
+        from oscar.core import events
         from oscar.core.agent import get_agent
 
         agent = get_agent()
 
-        with console.status("[bold blue]Thinking...[/bold blue]"):
-            response = agent.chat(user_input)
+        def _on_event(event):
+            etype = event.get("type")
+            if etype == "tool_call":
+                _render_tool_call(
+                    event.get("tool_name", "tool"),
+                    event.get("data", "") or "",
+                    event.get("risk", "low"),
+                )
+            elif etype == "tool_result":
+                _render_tool_result(
+                    event.get("tool_name", "tool"),
+                    event.get("data", "") or "",
+                    bool(event.get("ok", True)),
+                )
+            # step/thinking events are intentionally suppressed in the CLI;
+            # the tool_call line conveys the same information without
+            # double-printing.
+
+        unsubscribe = events.subscribe(_on_event)
+        try:
+            with console.status("[bold blue]Thinking...[/bold blue]", spinner="dots"):
+                response = agent.chat(user_input)
+        finally:
+            unsubscribe()
 
         console.print()
         console.print(Markdown(response))
@@ -143,13 +226,26 @@ def _tail_lines(path: Path, count: int) -> list[str]:
 @click.pass_context
 @click.option("--debug", is_flag=True, help="Enable debug mode")
 @click.option("--config-check", is_flag=True, help="Check configuration and exit")
-def main(ctx, debug, config_check):
+@click.option(
+    "--repo",
+    "repo",
+    type=click.Path(exists=False, file_okay=False, dir_okay=True),
+    help="Path to the git repository OSCAR should operate on (defaults to current directory)",
+)
+def main(ctx, debug, config_check, repo):
     """OSCAR — GitHub-Specialized AI Coding Assistant"""
 
     if debug:
         os.environ["OSCAR_DEBUG"] = "true"
 
     configure_logging(level="DEBUG" if debug else "WARNING")
+
+    # Set repo from --repo flag, or default to the cwd OSCAR was invoked from.
+    initial_repo = repo or os.getcwd()
+    resolved = set_active_repo(initial_repo)
+    if resolved is None and repo:
+        console.print(f"[red]Cannot use --repo {repo!r}: directory does not exist.[/red]")
+        sys.exit(1)
 
     if ctx.invoked_subcommand is not None:
         return
@@ -163,6 +259,7 @@ def main(ctx, debug, config_check):
             console.print(f"[green]OK[/green] Agent initialized with {tool_count} tools")
             console.print("[green]OK[/green] Model: gemini-2.5-flash (Vertex AI)")
             console.print(f"[green]OK[/green] Memory blocks: {list(agent.blocks.keys())}")
+            console.print(f"[green]OK[/green] Active repo: {get_active_repo() or '(default)'}")
             return
 
         display_welcome()
@@ -174,18 +271,21 @@ def main(ctx, debug, config_check):
                 if not user_input:
                     continue
 
-                cmd = user_input.lower()
+                lowered = user_input.lower()
+                first_word = lowered.split(maxsplit=1)[0]
 
-                if cmd in ("quit", "exit"):
+                if first_word in ("quit", "exit"):
                     console.print("[dim]Goodbye.[/dim]")
                     break
-                elif cmd in ("help", "?"):
+                elif first_word in ("help", "?"):
                     display_help()
-                elif cmd == "config":
+                elif first_word == "config":
                     show_config()
-                elif cmd == "test":
+                elif first_word == "repo":
+                    handle_repo_command(user_input[len(first_word):])
+                elif first_word == "test":
                     test_llm_connection()
-                elif cmd == "serve":
+                elif first_word == "serve":
                     start_api_server()
                 else:
                     process_user_request(user_input)
