@@ -34,7 +34,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Skill(codex:setup)"
     ]
   }
 }
