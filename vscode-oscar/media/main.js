@@ -27,7 +27,14 @@
         const title = el("h2");
         title.textContent = "OSCAR";
         statusDot = el("div", "status-dot");
-        header.append(title, statusDot);
+        const clearBtn = el("button", "clear-btn");
+        clearBtn.type = "button";
+        clearBtn.title = "Clear chat";
+        clearBtn.textContent = "Clear";
+        clearBtn.addEventListener("click", clearChat);
+        const headerRight = el("div", "header-right");
+        headerRight.append(clearBtn, statusDot);
+        header.append(title, headerRight);
 
         // Loading bar
         loadingBar = el("div", "loading-bar hidden");
@@ -403,6 +410,24 @@
         var e = document.createElement(tag);
         if (className) e.className = className;
         return e;
+    }
+
+    function clearChat() {
+        var cards = messagesContainer.querySelectorAll(".message-card");
+        cards.forEach(function (card) { card.remove(); });
+        if (currentStepProgress) {
+            currentStepProgress.remove();
+            currentStepProgress = null;
+        }
+        currentStreamCard = null;
+        vscode.setState({ messages: [] });
+        var welcome = el("div", "welcome");
+        welcome.innerHTML =
+            "<h3>Welcome to OSCAR</h3>" +
+            "<p>GitHub-specialized AI coding assistant.<br>" +
+            "Ask about branches, diffs, PRs, or run commands.</p>";
+        var existing = messagesContainer.querySelector(".welcome");
+        if (!existing) messagesContainer.appendChild(welcome);
     }
 
     // ── State persistence (survives panel hide/show) ────────────────
