@@ -2,6 +2,7 @@
 export interface ChatRequest {
     message: string;
     session_id?: string;
+    repo_path?: string;
 }
 
 export interface ChatResponse {
@@ -31,6 +32,8 @@ export interface StreamEvent {
     data: string | ConfirmPayload | null;
     step_number?: number;
     tool_name?: string;
+    risk?: string;
+    ok?: boolean;
 }
 
 // GET /health
@@ -45,12 +48,14 @@ export interface HealthResponse {
 export interface BranchesResponse {
     branches: string[];
     current: string;
+    repo_path?: string;
 }
 
 // POST /compare
 export interface CompareRequest {
     base: string;
     head: string;
+    repo_path?: string;
 }
 
 export interface CompareResponse {
@@ -63,6 +68,7 @@ export interface CompareResponse {
 export interface ReviewRequest {
     branch: string;
     base?: string;
+    repo_path?: string;
 }
 
 export interface ReviewResponse {
@@ -89,7 +95,8 @@ export interface WebviewMessage {
         | "getHistory"
         | "review"
         | "cancel"
-        | "confirmResponse";
+        | "confirmResponse"
+        | "refreshBranches";
     text?: string;
     base?: string;
     head?: string;
@@ -109,7 +116,8 @@ export interface ExtensionMessage {
         | "error"
         | "loading"
         | "streamDone"
-        | "versionMismatch";
+        | "versionMismatch"
+        | "workspaceInfo";
     data?: unknown;
     message?: string;
 }

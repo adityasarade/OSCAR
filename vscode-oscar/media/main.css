@@ -28,6 +28,15 @@ body {
     padding: 8px 12px;
     border-bottom: 1px solid var(--vscode-panel-border);
     flex-shrink: 0;
+    gap: 8px;
+    min-width: 0;
+}
+
+.header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .header h2 {
@@ -36,11 +45,20 @@ body {
     letter-spacing: 0.5px;
 }
 
+.repo-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--vscode-testing-iconFailed);
+    flex-shrink: 0;
 }
 
 .status-dot.connected {
@@ -51,6 +69,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .clear-btn {
@@ -81,7 +100,7 @@ body {
 .message-card {
     padding: 8px 12px;
     border-radius: 6px;
-    max-width: 90%;
+    max-width: 95%;
     word-wrap: break-word;
     line-height: 1.45;
     font-size: 13px;
@@ -128,15 +147,79 @@ body {
     border-radius: 3px;
 }
 
+/* Diff card (compare/review results) */
+.message-card.diff-card {
+    align-self: stretch;
+    max-width: 100%;
+    background: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border, transparent);
+    padding: 8px 12px;
+}
+
+.diff-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--vscode-editor-foreground);
+}
+
+.diff-pre {
+    background: var(--vscode-textCodeBlock-background);
+    border-radius: 4px;
+    padding: 8px;
+    overflow: auto;
+    max-height: 360px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 12px;
+    white-space: pre;
+}
+
 /* Branch compare section */
 .branch-compare-section {
-    padding: 8px;
+    padding: 8px 10px;
     border-bottom: 1px solid var(--vscode-panel-border);
     display: flex;
-    gap: 4px;
-    align-items: center;
+    flex-direction: column;
+    gap: 6px;
     flex-shrink: 0;
-    flex-wrap: wrap;
+}
+
+.branch-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+    color: var(--vscode-foreground);
+    border-radius: 3px;
+    width: 22px;
+    height: 22px;
+    line-height: 1;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.icon-btn:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+}
+
+.branch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.branch-label {
+    width: 38px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    flex-shrink: 0;
 }
 
 .branch-compare-section select {
@@ -151,51 +234,137 @@ body {
     font-size: 12px;
 }
 
-.branch-compare-section button {
-    padding: 4px 10px;
-    background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
+.branch-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.branch-actions button {
+    flex: 1;
+    padding: 4px 8px;
     border: none;
     border-radius: 3px;
     cursor: pointer;
     font-size: 12px;
-    white-space: nowrap;
 }
 
-.branch-compare-section button:hover {
+.branch-actions .primary-action {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.branch-actions .primary-action:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.branch-actions .secondary-action {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.branch-actions .secondary-action:hover {
     background: var(--vscode-button-secondaryHoverBackground);
 }
 
-/* Step progress indicator */
-.step-progress {
+.branch-status {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    min-height: 14px;
+}
+
+.branch-status.warn {
+    color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+/* Tool-call streaming group */
+.tool-group {
     align-self: flex-start;
     padding: 6px 10px;
     font-size: 12px;
     color: var(--vscode-descriptionForeground);
+    border-left: 2px solid var(--vscode-panel-border);
     display: flex;
     flex-direction: column;
     gap: 3px;
+    max-width: 95%;
+    background: var(--vscode-editorWidget-background, transparent);
+    border-radius: 4px;
 }
 
-.step-item {
+.tool-group-heading {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 2px;
+}
+
+.tool-step {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
 }
 
-.step-item .spinner {
+.tool-step-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.tool-step-label {
+    font-weight: 500;
+    color: var(--vscode-editor-foreground);
+}
+
+.tool-step-args {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    word-break: break-word;
+}
+
+.tool-step-result {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    word-break: break-word;
+}
+
+.tool-step.error .tool-step-label,
+.tool-step.error .tool-step-result {
+    color: var(--vscode-errorForeground);
+}
+
+.tool-step .spinner {
     display: inline-block;
-    width: 12px;
-    height: 12px;
+    width: 11px;
+    height: 11px;
+    margin-top: 3px;
     border: 2px solid var(--vscode-descriptionForeground);
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
 }
 
-.step-item .checkmark::before {
+.tool-step .checkmark::before {
     content: "\2713";
     color: var(--vscode-testing-iconPassed);
+}
+
+.tool-step .cross::before {
+    content: "\2717";
+    color: var(--vscode-errorForeground);
+}
+
+.tool-step .checkmark,
+.tool-step .cross {
+    width: 11px;
+    line-height: 1;
+    margin-top: 2px;
+    flex-shrink: 0;
 }
 
 @keyframes spin {

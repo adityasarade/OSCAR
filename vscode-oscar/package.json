@@ -2,7 +2,7 @@
   "name": "oscar-assistant",
   "displayName": "OSCAR - GitHub Coding Assistant",
   "description": "AI-powered GitHub-specialized coding assistant",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "publisher": "adityasarade",
   "engines": {
     "vscode": "^1.85.0"

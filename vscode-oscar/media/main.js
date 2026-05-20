@@ -9,13 +9,19 @@
     let cancelBtn;
     let baseBranchSelect;
     let headBranchSelect;
+    let compareBtn;
+    let reviewBtn;
+    let refreshBranchesBtn;
+    let branchStatus;
+    let repoLabel;
     let loadingBar;
     let statusDot;
 
     // Streaming state
     let currentStreamCard = null;
-    let currentStepProgress = null;
+    let currentToolGroup = null;
     let chatInFlight = false;
+    let currentRepoPath = "";
 
     // ── Initialization ───────────────────────────────────────────────
 
@@ -24,8 +30,14 @@
 
         // Header
         const header = el("div", "header");
+        const headerLeft = el("div", "header-left");
         const title = el("h2");
         title.textContent = "OSCAR";
+        repoLabel = el("div", "repo-label");
+        repoLabel.textContent = "(no workspace)";
+        repoLabel.title = "No workspace folder";
+        headerLeft.append(title, repoLabel);
+
         statusDot = el("div", "status-dot");
         const clearBtn = el("button", "clear-btn");
         clearBtn.type = "button";
@@ -34,21 +46,61 @@
         clearBtn.addEventListener("click", clearChat);
         const headerRight = el("div", "header-right");
         headerRight.append(clearBtn, statusDot);
-        header.append(title, headerRight);
+        header.append(headerLeft, headerRight);
 
         // Loading bar
         loadingBar = el("div", "loading-bar hidden");
 
         // Branch compare section
         const branchSection = el("div", "branch-compare-section");
+
+        const branchHeading = el("div", "branch-heading");
+        const branchHeadingText = el("span");
+        branchHeadingText.textContent = "Compare branches";
+        refreshBranchesBtn = el("button", "icon-btn");
+        refreshBranchesBtn.type = "button";
+        refreshBranchesBtn.title = "Refresh branch list";
+        refreshBranchesBtn.textContent = "↻";
+        refreshBranchesBtn.addEventListener("click", function () {
+            vscode.postMessage({ type: "refreshBranches" });
+            branchStatus.textContent = "Refreshing…";
+        });
+        branchHeading.append(branchHeadingText, refreshBranchesBtn);
+
+        const baseRow = el("div", "branch-row");
+        const baseLabel = el("label", "branch-label");
+        baseLabel.textContent = "Base";
         baseBranchSelect = el("select");
-        baseBranchSelect.innerHTML = '<option value="">base branch...</option>';
+        baseBranchSelect.innerHTML = '<option value="">(none)</option>';
+        baseRow.append(baseLabel, baseBranchSelect);
+
+        const headRow = el("div", "branch-row");
+        const headLabel = el("label", "branch-label");
+        headLabel.textContent = "Head";
         headBranchSelect = el("select");
-        headBranchSelect.innerHTML = '<option value="">head branch...</option>';
-        const compareBtn = el("button");
+        headBranchSelect.innerHTML = '<option value="">(none)</option>';
+        headRow.append(headLabel, headBranchSelect);
+
+        const branchActions = el("div", "branch-actions");
+        compareBtn = el("button", "primary-action");
         compareBtn.textContent = "Compare";
         compareBtn.addEventListener("click", compareBranches);
-        branchSection.append(baseBranchSelect, headBranchSelect, compareBtn);
+        reviewBtn = el("button", "secondary-action");
+        reviewBtn.textContent = "Review";
+        reviewBtn.title = "Show the full diff of head vs base";
+        reviewBtn.addEventListener("click", reviewBranch);
+        branchActions.append(compareBtn, reviewBtn);
+
+        branchStatus = el("div", "branch-status");
+        branchStatus.textContent = "Loading branches…";
+
+        branchSection.append(
+            branchHeading,
+            baseRow,
+            headRow,
+            branchActions,
+            branchStatus
+        );
 
         // Messages area
         messagesContainer = el("div", "messages-container");
@@ -103,10 +155,32 @@
     function compareBranches() {
         const base = baseBranchSelect.value;
         const head = headBranchSelect.value;
-        if (!base || !head) return;
-
+        if (!base || !head) {
+            branchStatus.textContent = "Select base and head branches first.";
+            branchStatus.classList.add("warn");
+            return;
+        }
+        branchStatus.classList.remove("warn");
+        branchStatus.textContent = "Comparing " + base + " → " + head + "…";
         addMessageCard("user", "Compare " + base + " → " + head);
         vscode.postMessage({ type: "compare", base: base, head: head });
+    }
+
+    function reviewBranch() {
+        const base = baseBranchSelect.value;
+        const head = headBranchSelect.value;
+        if (!head) {
+            branchStatus.textContent = "Select a head branch to review.";
+            branchStatus.classList.add("warn");
+            return;
+        }
+        branchStatus.classList.remove("warn");
+        branchStatus.textContent = "Reviewing " + head + "…";
+        addMessageCard(
+            "user",
+            "Review " + head + (base ? " vs " + base : "")
+        );
+        vscode.postMessage({ type: "review", branch: head, base: base || undefined });
     }
 
     function onInputKeydown(e) {
@@ -128,6 +202,21 @@
         removeWelcome();
         const card = el("div", "message-card " + role);
         card.innerHTML = renderMarkdown(content);
+        messagesContainer.appendChild(card);
+        scrollToBottom();
+        return card;
+    }
+
+    function addDiffCard(title, body) {
+        removeWelcome();
+        const card = el("div", "message-card diff-card");
+        const heading = el("div", "diff-title");
+        heading.textContent = title;
+        const pre = el("pre", "diff-pre");
+        const code = el("code");
+        code.textContent = body;
+        pre.appendChild(code);
+        card.append(heading, pre);
         messagesContainer.appendChild(card);
         scrollToBottom();
         return card;
@@ -174,18 +263,24 @@
         switch (event.type) {
             case "thinking":
             case "step":
-                ensureStepProgress();
-                addStep(event.data, true);
+                ensureToolGroup();
+                addToolStep("thinking", event.data || "Thinking…");
                 break;
 
-            case "tool_call":
-                ensureStepProgress();
-                addStep("Calling " + (event.tool_name || "tool") + "...", true);
+            case "tool_call": {
+                ensureToolGroup();
+                const label = event.tool_name || "tool";
+                const args = typeof event.data === "string" ? event.data : "";
+                addToolStep("tool_call", label, args, true);
                 break;
+            }
 
-            case "tool_result":
-                markLastStepDone();
+            case "tool_result": {
+                const ok = event.ok !== false;
+                const snippet = typeof event.data === "string" ? event.data : "";
+                markLastStepDone(ok, snippet);
                 break;
+            }
 
             case "confirm":
                 addConfirmCard(event.data);
@@ -261,46 +356,64 @@
         scrollToBottom();
     }
 
-    function ensureStepProgress() {
-        if (!currentStepProgress) {
+    function ensureToolGroup() {
+        if (!currentToolGroup) {
             removeWelcome();
-            currentStepProgress = el("div", "step-progress");
-            messagesContainer.appendChild(currentStepProgress);
+            currentToolGroup = el("div", "tool-group");
+            const heading = el("div", "tool-group-heading");
+            heading.textContent = "Working…";
+            currentToolGroup.append(heading);
+            messagesContainer.appendChild(currentToolGroup);
             scrollToBottom();
         }
     }
 
-    function addStep(label, inProgress) {
-        const item = el("div", "step-item");
+    function addToolStep(kind, label, args, inProgress) {
+        const item = el("div", "tool-step " + kind);
         const icon = el("span", inProgress ? "spinner" : "checkmark");
-        const text = el("span");
-        text.textContent = label;
-        item.append(icon, text);
-        currentStepProgress.appendChild(item);
+        const main = el("div", "tool-step-main");
+        const labelEl = el("span", "tool-step-label");
+        labelEl.textContent = label;
+        main.append(labelEl);
+        if (args) {
+            const argsEl = el("span", "tool-step-args");
+            argsEl.textContent = args;
+            main.append(argsEl);
+        }
+        item.append(icon, main);
+        currentToolGroup.appendChild(item);
         scrollToBottom();
     }
 
-    function markLastStepDone() {
-        if (!currentStepProgress) return;
-        const items = currentStepProgress.querySelectorAll(".step-item");
+    function markLastStepDone(ok, snippet) {
+        if (!currentToolGroup) return;
+        const items = currentToolGroup.querySelectorAll(".tool-step");
         const last = items[items.length - 1];
-        if (last) {
-            const icon = last.querySelector(".spinner");
-            if (icon) {
-                icon.className = "checkmark";
-            }
+        if (!last) return;
+        const icon = last.querySelector(".spinner");
+        if (icon) {
+            icon.className = ok ? "checkmark" : "cross";
+        }
+        if (!ok) {
+            last.classList.add("error");
+        }
+        if (snippet) {
+            const main = last.querySelector(".tool-step-main");
+            const result = el("div", "tool-step-result");
+            result.textContent = snippet;
+            main.append(result);
         }
     }
 
     function finalizeStream() {
-        if (currentStepProgress) {
+        if (currentToolGroup) {
             // Mark all remaining spinners as done
-            currentStepProgress.querySelectorAll(".spinner").forEach(function (s) {
+            currentToolGroup.querySelectorAll(".spinner").forEach(function (s) {
                 s.className = "checkmark";
             });
         }
         currentStreamCard = null;
-        currentStepProgress = null;
+        currentToolGroup = null;
         chatInFlight = false;
         setLoading(false);
     }
@@ -308,12 +421,21 @@
     // ── Branch handling ──────────────────────────────────────────────
 
     function handleBranches(data) {
-        if (!data || !data.branches) return;
+        if (!data) return;
+
+        if (data.error) {
+            branchStatus.textContent = data.error;
+            branchStatus.classList.add("warn");
+        } else {
+            branchStatus.classList.remove("warn");
+        }
+
+        const branches = Array.isArray(data.branches) ? data.branches : [];
 
         [baseBranchSelect, headBranchSelect].forEach(function (select) {
-            // Keep the placeholder option
-            select.innerHTML = '<option value="">select branch...</option>';
-            data.branches.forEach(function (branch) {
+            const previous = select.value;
+            select.innerHTML = '<option value="">(none)</option>';
+            branches.forEach(function (branch) {
                 const opt = document.createElement("option");
                 opt.value = branch;
                 opt.textContent = branch;
@@ -322,14 +444,33 @@
                 }
                 select.appendChild(opt);
             });
+            // Restore previous selection if it's still valid
+            if (previous && branches.indexOf(previous) !== -1) {
+                select.value = previous;
+            }
         });
 
-        // Default base to main/master if available
-        var mainBranch = data.branches.find(function (b) {
-            return b === "main" || b === "master";
-        });
-        if (mainBranch) baseBranchSelect.value = mainBranch;
-        if (data.current) headBranchSelect.value = data.current;
+        // Default base to main/master if nothing else picked
+        if (!baseBranchSelect.value) {
+            const mainBranch = branches.find(function (b) {
+                return b === "main" || b === "master";
+            });
+            if (mainBranch) baseBranchSelect.value = mainBranch;
+        }
+        // Default head to current
+        if (!headBranchSelect.value && data.current) {
+            headBranchSelect.value = data.current;
+        }
+
+        if (branches.length === 0 && !data.error) {
+            branchStatus.textContent = currentRepoPath
+                ? "No branches found in " + shortPath(currentRepoPath)
+                : "No workspace folder open.";
+        } else if (!data.error) {
+            const count = branches.length;
+            branchStatus.textContent =
+                count + " branch" + (count === 1 ? "" : "es") + " loaded.";
+        }
     }
 
     // ── Loading state ────────────────────────────────────────────────
@@ -346,6 +487,12 @@
         }
     }
 
+    function shortPath(path) {
+        if (!path) return "";
+        const parts = path.split(/[\\/]/);
+        return parts.slice(-2).join("/");
+    }
+
     // ── History restore ──────────────────────────────────────────────
 
     function restoreHistory(entries) {
@@ -354,6 +501,17 @@
         entries.forEach(function (entry) {
             addMessageCard(entry.role, entry.content);
         });
+    }
+
+    function setWorkspace(info) {
+        currentRepoPath = info && info.repoPath ? info.repoPath : "";
+        if (currentRepoPath) {
+            repoLabel.textContent = shortPath(currentRepoPath);
+            repoLabel.title = currentRepoPath;
+        } else {
+            repoLabel.textContent = "(no workspace)";
+            repoLabel.title = "No workspace folder";
+        }
     }
 
     // ── Message listener ─────────────────────────────────────────────
@@ -379,15 +537,31 @@
                 statusDot.classList.add("connected");
                 break;
 
-            case "comparison":
+            case "comparison": {
                 setLoading(false);
-                addMessageCard("assistant", msg.data.output || msg.data.summary || JSON.stringify(msg.data));
+                const data = msg.data || {};
+                if (data.success && data.output) {
+                    addDiffCard("Branch comparison", data.output);
+                } else {
+                    addMessageCard("error", data.error || data.output || "Compare failed");
+                }
+                branchStatus.textContent = "Ready.";
+                branchStatus.classList.remove("warn");
                 break;
+            }
 
-            case "review":
+            case "review": {
                 setLoading(false);
-                addMessageCard("assistant", msg.data.output || msg.data.summary || JSON.stringify(msg.data));
+                const data = msg.data || {};
+                if (data.success && data.output) {
+                    addDiffCard("Branch review", data.output);
+                } else {
+                    addMessageCard("error", data.error || data.output || "Review failed");
+                }
+                branchStatus.textContent = "Ready.";
+                branchStatus.classList.remove("warn");
                 break;
+            }
 
             case "history":
                 restoreHistory(msg.data);
@@ -401,6 +575,14 @@
             case "loading":
                 setLoading(!!msg.data);
                 break;
+
+            case "workspaceInfo":
+                setWorkspace(msg.data);
+                if (msg.data && msg.data.reason) {
+                    // A workspace change triggers a fresh branch fetch.
+                    branchStatus.textContent = "Workspace changed — reloading branches…";
+                }
+                break;
         }
     });
 
@@ -413,12 +595,9 @@
     }
 
     function clearChat() {
-        var cards = messagesContainer.querySelectorAll(".message-card");
+        var cards = messagesContainer.querySelectorAll(".message-card, .tool-group");
         cards.forEach(function (card) { card.remove(); });
-        if (currentStepProgress) {
-            currentStepProgress.remove();
-            currentStepProgress = null;
-        }
+        currentToolGroup = null;
         currentStreamCard = null;
         vscode.setState({ messages: [] });
         var welcome = el("div", "welcome");
@@ -437,7 +616,8 @@
         var messages = [];
         cards.forEach(function (card) {
             var role = card.classList.contains("user") ? "user" :
-                       card.classList.contains("error") ? "error" : "assistant";
+                       card.classList.contains("error") ? "error" :
+                       card.classList.contains("diff-card") ? "diff" : "assistant";
             messages.push({ role: role, html: card.innerHTML });
         });
         vscode.setState({ messages: messages });
@@ -448,7 +628,8 @@
         if (state && state.messages && state.messages.length > 0) {
             removeWelcome();
             state.messages.forEach(function (m) {
-                var card = el("div", "message-card " + m.role);
+                var cls = m.role === "diff" ? "message-card diff-card" : "message-card " + m.role;
+                var card = el("div", cls);
                 card.innerHTML = m.html;
                 messagesContainer.appendChild(card);
             });
@@ -460,6 +641,12 @@
     var _origAddMessageCard = addMessageCard;
     addMessageCard = function (role, content) {
         var card = _origAddMessageCard(role, content);
+        saveState();
+        return card;
+    };
+    var _origAddDiffCard = addDiffCard;
+    addDiffCard = function (title, body) {
+        var card = _origAddDiffCard(title, body);
         saveState();
         return card;
     };

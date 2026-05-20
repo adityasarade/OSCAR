@@ -30,6 +30,21 @@ export class OscarViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage((message: WebviewMessage) =>
             this.handleMessage(message)
         );
+
+        // Tell the webview which repo it's bound to so the header can reflect it.
+        this.postMessage({
+            type: "workspaceInfo",
+            data: { repoPath: this.client.getRepoPath() ?? "" },
+        });
+    }
+
+    notifyWorkspaceChange(newPath: string | null, reason: string): void {
+        this.postMessage({
+            type: "workspaceInfo",
+            data: { repoPath: newPath ?? "", reason },
+        });
+        // Refresh the branch list for the new repo.
+        void this.refreshBranches();
     }
 
     private async handleMessage(message: WebviewMessage): Promise<void> {
@@ -59,7 +74,16 @@ export class OscarViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        this.postMessage({ type: "loading", data: true });
+        // Branch fetches should NOT raise the global loading bar — they're a
+        // quick background sync, and the bar would never get cleared since the
+        // branches handler doesn't unset it.
+        const isBranchFetch =
+            message.type === "getBranches" ||
+            message.type === "refreshBranches";
+
+        if (!isBranchFetch) {
+            this.postMessage({ type: "loading", data: true });
+        }
 
         try {
             switch (message.type) {
@@ -67,11 +91,10 @@ export class OscarViewProvider implements vscode.WebviewViewProvider {
                     await this.handleChat(message.text!);
                     break;
 
-                case "getBranches": {
-                    const branches = await this.client.getBranches();
-                    this.postMessage({ type: "branches", data: branches });
+                case "getBranches":
+                case "refreshBranches":
+                    await this.refreshBranches();
                     break;
-                }
 
                 case "compare": {
                     const comparison = await this.client.compare(
@@ -101,6 +124,25 @@ export class OscarViewProvider implements vscode.WebviewViewProvider {
             const msg =
                 err instanceof Error ? err.message : "Unknown error";
             this.postMessage({ type: "error", message: msg });
+        }
+    }
+
+    private async refreshBranches(): Promise<void> {
+        try {
+            const branches = await this.client.getBranches();
+            this.postMessage({ type: "branches", data: branches });
+        } catch (err: unknown) {
+            const msg =
+                err instanceof Error ? err.message : "Failed to load branches";
+            this.postMessage({
+                type: "branches",
+                data: {
+                    branches: [],
+                    current: "",
+                    repo_path: this.client.getRepoPath() ?? "",
+                    error: msg,
+                },
+            });
         }
     }
 

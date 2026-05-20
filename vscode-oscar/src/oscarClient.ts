@@ -10,6 +10,7 @@ import {
 
 export class OscarClient {
     private baseUrl: string;
+    private repoPath: string | null = null;
 
     constructor(baseUrl: string) {
         this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -19,9 +20,20 @@ export class OscarClient {
         this.baseUrl = url.replace(/\/+$/, "");
     }
 
+    setRepoPath(path: string | null): void {
+        this.repoPath = path && path.trim() ? path : null;
+    }
+
+    getRepoPath(): string | null {
+        return this.repoPath;
+    }
+
     async healthCheck(): Promise<HealthResponse | null> {
         try {
-            return await this.request<HealthResponse>("/health", {
+            const qs = this.repoPath
+                ? `?repo_path=${encodeURIComponent(this.repoPath)}`
+                : "";
+            return await this.request<HealthResponse>(`/health${qs}`, {
                 method: "GET",
             });
         } catch {
@@ -32,7 +44,10 @@ export class OscarClient {
     async chat(message: string): Promise<ChatResponse> {
         return this.request<ChatResponse>("/chat", {
             method: "POST",
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({
+                message,
+                repo_path: this.repoPath ?? undefined,
+            }),
         });
     }
 
@@ -43,7 +58,10 @@ export class OscarClient {
         const res = await fetch(`${this.baseUrl}/chat/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({
+                message,
+                repo_path: this.repoPath ?? undefined,
+            }),
         });
 
         if (!res.ok) {
@@ -91,20 +109,31 @@ export class OscarClient {
     }
 
     async getBranches(): Promise<BranchesResponse> {
-        return this.request<BranchesResponse>("/branches", { method: "GET" });
+        const qs = this.repoPath
+            ? `?repo_path=${encodeURIComponent(this.repoPath)}`
+            : "";
+        return this.request<BranchesResponse>(`/branches${qs}`, { method: "GET" });
     }
 
     async compare(base: string, head: string): Promise<CompareResponse> {
         return this.request<CompareResponse>("/compare", {
             method: "POST",
-            body: JSON.stringify({ base, head }),
+            body: JSON.stringify({
+                base,
+                head,
+                repo_path: this.repoPath ?? undefined,
+            }),
         });
     }
 
     async review(branch: string, base?: string): Promise<ReviewResponse> {
         return this.request<ReviewResponse>("/review", {
             method: "POST",
-            body: JSON.stringify({ branch, base }),
+            body: JSON.stringify({
+                branch,
+                base,
+                repo_path: this.repoPath ?? undefined,
+            }),
         });
     }
 
@@ -121,11 +150,15 @@ export class OscarClient {
     }
 
     async confirmTool(requestId: string, approved: boolean): Promise<void> {
-        await fetch(`${this.baseUrl}/chat/confirm`, {
+        const res = await fetch(`${this.baseUrl}/chat/confirm`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ request_id: requestId, approved }),
         });
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Confirm failed (${res.status}): ${text}`);
+        }
     }
 
     private async request<T>(path: string, options: RequestInit): Promise<T> {
