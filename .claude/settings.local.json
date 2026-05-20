@@ -38,7 +38,8 @@
       "Skill(codex:setup)",
       "Bash(git *)",
       "Bash(rm -f dist/*)",
-      "Bash(uv build *)"
+      "Bash(uv build *)",
+      "Bash(uv tool *)"
     ]
   }
 }
