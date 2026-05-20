@@ -2,12 +2,16 @@
 OSCAR Git Tool — GitHub-specialized git operations as standalone functions.
 
 Each function uses subprocess.run with list args (no shell=True) to avoid
-injection. Large outputs are truncated at 50K characters.
+injection. Large outputs are truncated at 50K characters. All commands run
+against the active repo (see oscar.core.repo_context) so the same tools
+serve OSCAR's own checkout and arbitrary IDE workspaces.
 """
 
 import subprocess
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+from oscar.core.repo_context import resolve_cwd
 
 
 _TRUNCATE_LIMIT = 50_000
@@ -21,13 +25,19 @@ def _truncate(text: str, limit: int = _TRUNCATE_LIMIT) -> str:
     return text[:limit] + "\n\n[...truncated at 50K chars]"
 
 
-def _run_git(args: List[str]) -> str:
+def _run_git(args: List[str], cwd: Optional[str] = None) -> str:
     """Run a git command and return stdout or a formatted error string."""
-    logger.debug("Running git command: git %s", " ".join(args))
+    effective_cwd = resolve_cwd(cwd)
+    logger.debug(
+        "Running git command: git %s (cwd=%s)",
+        " ".join(args),
+        effective_cwd or "(default)",
+    )
     result = subprocess.run(
         ["git"] + args,
         capture_output=True,
         text=True,
+        cwd=effective_cwd,
     )
     if result.returncode != 0:
         error = result.stderr.strip() or f"git command failed with exit code {result.returncode}"
@@ -127,11 +137,13 @@ def _format_parsed_status(parsed: Dict[str, Any]) -> str:
 def git_status() -> str:
     """Get the current repository status including branch name, repo root, and working tree state."""
     command = ["git", "status", "--porcelain=v2", "--branch"]
-    logger.debug("Running git command: %s", " ".join(command))
+    cwd = resolve_cwd(None)
+    logger.debug("Running git command: %s (cwd=%s)", " ".join(command), cwd or "(default)")
     result = subprocess.run(
         command,
         capture_output=True,
         text=True,
+        cwd=cwd,
     )
     if result.returncode != 0:
         error = _git_error(result)
@@ -221,11 +233,13 @@ def git_branches() -> str:
         "refs/heads/",
         "refs/remotes/origin/",
     ]
-    logger.debug("Running git command: %s", " ".join(command))
+    cwd = resolve_cwd(None)
+    logger.debug("Running git command: %s (cwd=%s)", " ".join(command), cwd or "(default)")
     result = subprocess.run(
         command,
         capture_output=True,
         text=True,
+        cwd=cwd,
     )
     if result.returncode != 0:
         error = _git_error(result)
@@ -237,6 +251,7 @@ def git_branches() -> str:
         ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
         capture_output=True,
         text=True,
+        cwd=cwd,
     )
     current = current_result.stdout.strip() if current_result.returncode == 0 else ""
 

@@ -13,7 +13,7 @@ def _completed(args, stdout="", stderr="", returncode=0):
 
 
 def test_git_branches_parses_local_and_remote_refs(monkeypatch):
-    def fake_run(command, capture_output, text):
+    def fake_run(command, capture_output, text, cwd=None):
         if command == ["git", "symbolic-ref", "--quiet", "--short", "HEAD"]:
             return _completed(command, stdout="main\n")
         assert command[:2] == ["git", "for-each-ref"]
@@ -41,7 +41,7 @@ def test_git_branches_parses_local_and_remote_refs(monkeypatch):
 
 
 def test_git_status_returns_formatted_non_error_text(monkeypatch):
-    def fake_run(command, capture_output, text):
+    def fake_run(command, capture_output, text, cwd=None):
         assert command == ["git", "status", "--porcelain=v2", "--branch"]
         return _completed(
             command,
@@ -67,3 +67,26 @@ def test_git_status_returns_formatted_non_error_text(monkeypatch):
     assert "Ahead: 1 Behind: 2" in output
     assert ".M src/app.py" in output
     assert "?? tests/test_app.py" in output
+
+
+def test_git_branches_runs_against_active_repo(monkeypatch, tmp_path):
+    """Setting active_repo via repo_context routes git to that cwd."""
+    from oscar.core import repo_context
+
+    captured = {}
+
+    def fake_run(command, capture_output, text, cwd=None):
+        captured.setdefault("cwds", []).append(cwd)
+        if command == ["git", "symbolic-ref", "--quiet", "--short", "HEAD"]:
+            return _completed(command, stdout="dev\n")
+        return _completed(command, stdout="dev\nmain\n")
+
+    monkeypatch.setattr(git_tool.subprocess, "run", fake_run)
+
+    target = str(tmp_path)
+    with repo_context.use_repo(target):
+        out = git_tool.git_branches()
+
+    assert "* dev" in out
+    # Both subprocess calls inherited the active repo's cwd.
+    assert set(captured["cwds"]) == {target}

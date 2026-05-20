@@ -12,6 +12,7 @@ import platform
 import logging
 
 from oscar.config.settings import SAFETY_PATTERNS
+from oscar.core.repo_context import resolve_cwd
 
 
 _IS_WINDOWS = platform.system() == "Windows"
@@ -81,7 +82,7 @@ def run_shell_command(command: str, cwd: str = "", timeout: int = 30) -> str:
         return f"Error: Command blocked — {error}"
 
     translated = _translate_command(command)
-    run_cwd = cwd if cwd else None
+    run_cwd = resolve_cwd(cwd) if cwd else resolve_cwd(None)
 
     try:
         logger.debug("Running shell command: %s", translated)

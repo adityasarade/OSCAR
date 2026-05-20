@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from typing import Optional
+from typing import Any, Callable, Dict, Optional
+
+from oscar.core import events
 
 
 class ChatBroker:
@@ -16,6 +18,7 @@ class ChatBroker:
         self.cancel_flag = threading.Event()
         self.loop = loop
         self._confirm_lock = threading.Lock()
+        self._unsubscribe: Optional[Callable[[], None]] = None
 
     def _ensure_confirm(self, request_id: str) -> tuple[threading.Event, list[bool]]:
         with self._confirm_lock:
@@ -32,6 +35,21 @@ class ChatBroker:
             if request_id:
                 self._ensure_confirm(str(request_id))
         self.loop.call_soon_threadsafe(self.events.put_nowait, event_dict)
+
+    def attach(self) -> None:
+        """Subscribe to global agent events so they're forwarded as SSE."""
+        if self._unsubscribe is not None:
+            return
+
+        def _listener(event: Dict[str, Any]) -> None:
+            self.emit(event)
+
+        self._unsubscribe = events.subscribe(_listener)
+
+    def detach(self) -> None:
+        if self._unsubscribe is not None:
+            self._unsubscribe()
+            self._unsubscribe = None
 
     def wait_for_confirm(self, request_id: str, timeout: int = 300) -> bool:
         """Wait for a user confirmation, defaulting to rejection on timeout."""

@@ -24,6 +24,7 @@ import oscar.core.asterix_patch  # noqa: F401
 from asterix import Agent, BlockConfig
 
 from oscar.config.prompts import SYSTEM_PROMPT
+from oscar.core.events import emit as emit_event
 from oscar.core.safety import assess_risk, on_before_tool_call
 from oscar.config.settings import settings
 
@@ -103,6 +104,32 @@ def _audit_log(
 _last_step: Dict[str, Any] = {}
 
 
+def _format_args_summary(arguments: Dict[str, Any], max_len: int = 120) -> str:
+    """Compact one-line summary of tool arguments for UI/log display."""
+    parts: List[str] = []
+    for key, value in arguments.items():
+        display = str(value).replace("\n", " ")
+        if len(display) > 60:
+            display = display[:57] + "..."
+        parts.append(f"{key}={display}")
+    summary = ", ".join(parts)
+    if len(summary) > max_len:
+        summary = summary[: max_len - 3] + "..."
+    return summary
+
+
+def _shorten_result(text: str, max_len: int = 240) -> str:
+    """Trim a tool result to a single short line for surfacing in the UI/CLI."""
+    trimmed = text.strip()
+    first_line = trimmed.splitlines()[0] if trimmed else ""
+    if len(first_line) > max_len:
+        first_line = first_line[: max_len - 3] + "..."
+    extra = len(trimmed.splitlines()) - 1
+    if extra > 0:
+        first_line = f"{first_line} (+{extra} more lines)"
+    return first_line
+
+
 def _step_label(step_info: dict) -> str:
     """Format Asterix step info as the public SSE step label."""
     tool_names = step_info.get("tool_names", step_info.get("tool_calls", []))
@@ -124,14 +151,7 @@ def _on_step(step_number_or_info: Any, step_info: dict | None = None) -> None:
         step_info = {"step_number": step_number_or_info}
 
     _last_step = step_info
-    try:
-        from oscar.api.runtime import get_active_broker
-
-        broker = get_active_broker()
-    except Exception:
-        broker = None
-    if broker is not None:
-        broker.emit({"type": "step", "data": _step_label(step_info)})
+    emit_event({"type": "step", "data": _step_label(step_info)})
 
 
 def get_last_step() -> Dict[str, Any]:
@@ -182,7 +202,7 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
 
     # --- on_before_tool_call (safety confirmation) ---------------------------
     def patched_execute_tool_calls(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Wrap tool execution with safety check and audit logging."""
+        """Wrap tool execution with safety check, event emission, and audit logging."""
         results = []
         for tc in tool_calls:
             tool_id = tc["id"]
@@ -194,36 +214,74 @@ def _patch_agent(agent: Agent, system_prompt: str) -> None:
                 arguments = {}
 
             risk = assess_risk(tool_name, arguments)
+            args_summary = _format_args_summary(arguments)
+
             approved = on_before_tool_call(tool_name, arguments)
             if not approved:
                 logger.warning("Rejected tool call: %s", tool_name)
+                rejection = "Tool execution was rejected by user."
                 results.append({
                     "tool_call_id": tool_id,
                     "role": "tool",
                     "name": tool_name,
-                    "content": "Tool execution was rejected by user.",
+                    "content": rejection,
+                })
+                emit_event({
+                    "type": "tool_call",
+                    "tool_name": tool_name,
+                    "data": args_summary,
+                    "risk": risk,
+                })
+                emit_event({
+                    "type": "tool_result",
+                    "tool_name": tool_name,
+                    "data": rejection,
+                    "ok": False,
                 })
                 _audit_log(tool_name, arguments, risk=risk, approved=False)
                 continue
+
+            # Emit tool_call only after approval — for risky tools the
+            # confirm prompt has already surfaced via safety.py.
+            emit_event({
+                "type": "tool_call",
+                "tool_name": tool_name,
+                "data": args_summary,
+                "risk": risk,
+            })
 
             tool_started = time.perf_counter()
             try:
                 tool_result = agent._tool_registry.execute_tool(tool_name, **arguments)
                 logger.info("Completed tool call: %s", tool_name)
+                result_str = str(tool_result)
 
                 results.append({
                     "tool_call_id": tool_id,
                     "role": "tool",
                     "name": tool_name,
-                    "content": str(tool_result),
+                    "content": result_str,
+                })
+                emit_event({
+                    "type": "tool_result",
+                    "tool_name": tool_name,
+                    "data": _shorten_result(result_str),
+                    "ok": not result_str.startswith("Error"),
                 })
             except Exception as e:
                 logger.error("Tool call failed: %s: %s", tool_name, e)
+                error_str = f"Error: {e}"
                 results.append({
                     "tool_call_id": tool_id,
                     "role": "tool",
                     "name": tool_name,
-                    "content": f"Error: {e}",
+                    "content": error_str,
+                })
+                emit_event({
+                    "type": "tool_result",
+                    "tool_name": tool_name,
+                    "data": error_str[:200],
+                    "ok": False,
                 })
 
             latency_ms = (time.perf_counter() - tool_started) * 1000

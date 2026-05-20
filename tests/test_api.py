@@ -53,10 +53,57 @@ def test_branches_parses_git_branch_output(client, monkeypatch):
     response = client.get("/branches")
 
     assert response.status_code == 200
+    # Locals come first; remote-tracking duplicates of locals are dropped.
     assert response.json() == {
         "branches": ["main", "feature/api"],
         "current": "main",
+        "repo_path": "",
     }
+
+
+def test_branches_includes_remote_only_branches_with_full_ref(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "git_branches",
+        lambda: "\n".join(
+            [
+                "* main",
+                "  remotes/origin/main",
+                "  remotes/origin/release-2026",
+            ]
+        ),
+    )
+
+    response = client.get("/branches")
+
+    assert response.status_code == 200
+    body = response.json()
+    # Local `main` keeps its short form; remote-only branch keeps its
+    # full ref so /compare and /review can resolve it.
+    assert body["branches"] == ["main", "remotes/origin/release-2026"]
+    assert body["current"] == "main"
+
+
+def test_branches_accepts_repo_path_query(client, monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_branches():
+        from oscar.core import repo_context
+
+        captured["active_repo"] = repo_context.get_active_repo()
+        return "* main"
+
+    monkeypatch.setattr(server, "git_branches", fake_branches)
+
+    response = client.get(
+        "/branches",
+        params={"repo_path": str(tmp_path)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["repo_path"] == str(tmp_path)
+    assert captured["active_repo"] == str(tmp_path.resolve())
 
 
 def test_metrics_returns_llm_and_audit_sections(client, monkeypatch, tmp_path):

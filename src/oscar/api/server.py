@@ -14,7 +14,7 @@ from pathlib import Path
 import threading
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -29,6 +29,7 @@ from oscar.api.runtime import (
 )
 from oscar.core.agent import get_agent
 from oscar.core import metrics as metrics_mod
+from oscar.core.repo_context import use_repo
 from oscar.logging_config import configure_logging
 from oscar.tools.git_tool import (
     git_branches,
@@ -44,6 +45,7 @@ from oscar.tools.git_tool import (
 
 class ChatRequest(BaseModel):
     message: str
+    repo_path: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -64,11 +66,13 @@ class HistoryEntry(BaseModel):
 class CompareRequest(BaseModel):
     base: str = "main"
     head: str
+    repo_path: Optional[str] = None
 
 
 class ReviewRequest(BaseModel):
     branch: str
     base: str = "main"
+    repo_path: Optional[str] = None
 
 
 class GitResponse(BaseModel):
@@ -125,7 +129,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="OSCAR API",
     description="GitHub-Specialized AI Coding Assistant",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -144,9 +148,10 @@ app.add_middleware(
 
 
 @app.get("/health")
-async def health():
+async def health(repo_path: Optional[str] = Query(default=None)):
     try:
-        status = git_status()
+        with use_repo(repo_path):
+            status = git_status()
         git_ok = not status.startswith("Error")
     except Exception:
         git_ok = False
@@ -167,9 +172,12 @@ async def chat(req: ChatRequest):
         raise HTTPException(409, "chat in progress")
     try:
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            _chat_executor, _agent.chat, req.message
-        )
+
+        def _run_with_repo() -> str:
+            with use_repo(req.repo_path):
+                return _agent.chat(req.message)
+
+        response = await loop.run_in_executor(_chat_executor, _run_with_repo)
         return ChatResponse(response=response)
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -187,13 +195,15 @@ async def chat_stream(req: ChatRequest):
 
     loop = asyncio.get_running_loop()
     broker = ChatBroker(loop)
+    broker.attach()
     set_active_broker(broker)
     result = {"response": "", "error": None}
 
     def _run_chat():
         try:
             if not broker.is_cancelled():
-                result["response"] = _agent.chat(req.message)
+                with use_repo(req.repo_path):
+                    result["response"] = _agent.chat(req.message)
         except Exception as e:
             result["error"] = str(e)
         finally:
@@ -215,6 +225,7 @@ async def chat_stream(req: ChatRequest):
                     break
             await chat_future
         finally:
+            broker.detach()
             clear_active_broker()
             if not chat_future.done():
                 broker.cancel()
@@ -270,36 +281,51 @@ async def history():
 
 
 @app.get("/branches")
-async def branches():
-    raw = git_branches()
+async def branches(repo_path: Optional[str] = Query(default=None)):
+    with use_repo(repo_path):
+        raw = git_branches()
     if raw.startswith("Error"):
         raise HTTPException(500, raw)
 
-    # Parse branch names from git output
-    branch_list = []
+    # Parse branch names from git output. Strategy:
+    # - Locals are added as-is.
+    # - Remote-tracking branches are added with their ``remotes/origin/``
+    #   prefix preserved (so the ref is usable in /compare and /review),
+    #   but only when no local branch with the same short name exists.
+    local_branches: list[str] = []
+    remote_branches: list[str] = []
     current = ""
     for line in raw.strip().split("\n"):
         line = line.strip()
-        if not line:
+        if not line or "->" in line:
             continue
         if line.startswith("* "):
             name = line[2:].strip()
             current = name
-            branch_list.append(name)
-        elif "->" in line:
-            continue  # skip HEAD -> origin/main
-        else:
-            # Strip remotes/origin/ prefix for cleaner display
-            name = line.replace("remotes/origin/", "").strip()
-            if name and name not in branch_list:
-                branch_list.append(name)
+            if name and name not in local_branches:
+                local_branches.append(name)
+            continue
+        if line.startswith("remotes/origin/"):
+            if line not in remote_branches:
+                remote_branches.append(line)
+            continue
+        if line not in local_branches:
+            local_branches.append(line)
 
-    return {"branches": branch_list, "current": current}
+    local_short = set(local_branches)
+    remote_only = [
+        r for r in remote_branches
+        if r[len("remotes/origin/"):] not in local_short
+    ]
+    branch_list = local_branches + remote_only
+
+    return {"branches": branch_list, "current": current, "repo_path": repo_path or ""}
 
 
 @app.post("/compare", response_model=GitResponse)
 async def compare(req: CompareRequest):
-    output = git_compare(req.base, req.head)
+    with use_repo(req.repo_path):
+        output = git_compare(req.base, req.head)
     return GitResponse(
         success="Error:" not in output,
         output=output,
@@ -309,7 +335,8 @@ async def compare(req: CompareRequest):
 
 @app.post("/review", response_model=GitResponse)
 async def review(req: ReviewRequest):
-    output = git_review(req.branch, req.base)
+    with use_repo(req.repo_path):
+        output = git_review(req.branch, req.base)
     return GitResponse(
         success="Error:" not in output,
         output=output,
