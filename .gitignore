@@ -12,7 +12,8 @@ build/
 .env
 downloads/
 Research papers/
-# context/
+context/
+docs/
 
 data/logs/
 data/agent_states/
