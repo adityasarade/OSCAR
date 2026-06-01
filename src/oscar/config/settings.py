@@ -33,17 +33,18 @@ class OSCARSettings:
         env_vars = {
             "groq": "GROQ_API_KEY",
             "openai": "OPENAI_API_KEY",
-            "gemini": "GEMINI_API_KEY"
+            "gemini": "GEMINI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
         }
-        
+
         env_var = env_vars.get(provider.lower())
         if not env_var:
             raise ValueError(f"Unknown provider: {provider}")
-        
+
         api_key = os.getenv(env_var)
         if not api_key:
             raise ValueError(f"API key not found for {provider}. Please set {env_var} in your .env file")
-        
+
         return api_key
     
     def get_tavily_keys(self) -> list:

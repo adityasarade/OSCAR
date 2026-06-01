@@ -27,12 +27,28 @@ def test_status_returns_agent_metadata(client, fake_agent):
     response = client.get("/status")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "agent_id": "oscar-test",
-        "tools": ["git_status"],
-        "memory_blocks": ["session_context"],
-        "conversation_length": 1,
-    }
+    body = response.json()
+    # Static fields
+    assert body["agent_id"] == "oscar-test"
+    assert body["tools"] == ["git_status"]
+    assert body["memory_blocks"] == ["session_context"]
+    assert body["conversation_length"] == 1
+    # New provider/model fields are env-driven and must be present.
+    assert "provider" in body
+    assert "model" in body
+
+
+def test_providers_lists_catalog_and_current_selection(client):
+    response = client.get("/providers")
+
+    assert response.status_code == 200
+    body = response.json()
+    provider_ids = [p["id"] for p in body["providers"]]
+    # All five providers should be advertised.
+    for expected in ("gemini", "openai", "anthropic", "groq", "ollama"):
+        assert expected in provider_ids, f"missing provider {expected}"
+    assert body["current"]["provider"]
+    assert body["current"]["model"]
 
 
 def test_branches_parses_git_branch_output(client, monkeypatch):

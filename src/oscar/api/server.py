@@ -20,6 +20,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 
+from oscar.config.providers import (
+    list_supported_providers,
+    selected_fallback_model,
+    selected_fallback_provider,
+    selected_model,
+    selected_provider,
+)
 from oscar.config.settings import settings
 from oscar.api.runtime import (
     ChatBroker,
@@ -374,6 +381,26 @@ async def status():
         "tools": [t.name for t in _agent.get_all_tools()],
         "memory_blocks": list(_agent.blocks.keys()),
         "conversation_length": len(_agent.conversation_history),
+        "provider": selected_provider(),
+        "model": selected_model(),
+    }
+
+
+@app.get("/providers")
+async def providers():
+    """Return the catalog of supported LLM providers and models.
+
+    Consumed by the VS Code extension so the model picker can render the same
+    list of providers the backend will actually accept.
+    """
+    return {
+        "providers": list_supported_providers(),
+        "current": {
+            "provider": selected_provider(),
+            "model": selected_model(),
+            "fallback_provider": selected_fallback_provider(),
+            "fallback_model": selected_fallback_model(),
+        },
     }
 
 

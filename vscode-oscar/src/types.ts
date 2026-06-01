@@ -44,6 +44,35 @@ export interface HealthResponse {
     git_available?: boolean;
 }
 
+// GET /providers
+export interface ProviderModel {
+    id: string;
+    label: string;
+    description: string;
+    recommended: boolean;
+}
+
+export interface ProviderInfo {
+    id: string;
+    label: string;
+    description: string;
+    requires_api_key: boolean;
+    api_key_env: string | null;
+    requires_local_server: boolean;
+    default_model: string;
+    models: ProviderModel[];
+}
+
+export interface ProvidersResponse {
+    providers: ProviderInfo[];
+    current: {
+        provider: string;
+        model: string;
+        fallback_provider: string;
+        fallback_model: string;
+    };
+}
+
 // GET /branches
 export interface BranchesResponse {
     branches: string[];

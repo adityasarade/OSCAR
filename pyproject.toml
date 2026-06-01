@@ -1,7 +1,7 @@
 [project]
 name = "oscar-agent"
-version = "0.5.1"
-description = "OSCAR - GitHub-Specialized AI Coding Assistant"
+version = "0.6.2"
+description = "OSCAR - GitHub-Specialized AI Coding Assistant (multi-provider: Gemini, OpenAI GPT-5.5/5.4, Claude 4.8/4.6, Groq, Ollama)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -34,6 +34,9 @@ classifiers = [
 dependencies = [
     "groq>=0.4.1",
     "google-genai>=1.0.0",
+    "openai>=2.30.0",         # GPT-5.5 (April 2026) recognised in ChatModel literal
+    "anthropic>=0.45.0",      # claude-opus-4-7 / sonnet-4-6 / haiku-4-5-20251001
+    "ollama>=0.4.0",          # optional fallback SDK; we use OpenAI-compat for tool calls
     "pyyaml>=6.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",

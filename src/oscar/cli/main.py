@@ -15,6 +15,13 @@ from rich.table import Table
 from rich.text import Text
 from rich.markdown import Markdown
 
+from oscar.config.providers import (
+    PROVIDERS,
+    selected_fallback_model,
+    selected_fallback_provider,
+    selected_model,
+    selected_provider,
+)
 from oscar.config.settings import settings
 from oscar.core.repo_context import set_active_repo, get_active_repo, is_git_repo
 from oscar.logging_config import configure_logging
@@ -37,11 +44,14 @@ def display_welcome():
     console.print(panel)
 
     repo = get_active_repo() or os.getcwd()
+    provider_id = selected_provider()
+    model_id = selected_model()
+    provider_label = PROVIDERS[provider_id].label if provider_id in PROVIDERS else provider_id
     config_info = (
-        "\n    [bold]Powered by:[/bold] Asterix + Gemini 2.5 Flash (Vertex AI)\n"
+        f"\n    [bold]Powered by:[/bold] Asterix + {provider_label} ([cyan]{model_id}[/cyan])\n"
         f"    [bold]Repo:[/bold] [cyan]{repo}[/cyan]"
         + ("" if is_git_repo(repo) else "  [yellow](not a git repo)[/yellow]")
-        + "\n    [dim]Type 'help' for commands or describe what you want to do...[/dim]\n"
+        + "\n    [dim]Type 'help' for commands, 'providers' to list models, or describe what you want to do...[/dim]\n"
     )
     console.print(config_info)
 
@@ -52,6 +62,7 @@ def display_help():
     [bold]Commands:[/bold]
     [cyan]help[/cyan] or [cyan]?[/cyan]    Show this help
     [cyan]config[/cyan]       Show configuration
+    [cyan]providers[/cyan]    List supported LLM providers and models
     [cyan]repo[/cyan]         Show or set the active repository
     [cyan]test[/cyan]         Test LLM connection
     [cyan]serve[/cyan]        Start the API server (port 8420)
@@ -81,12 +92,20 @@ def show_config():
     tool_count = len(agent.get_all_tools())
     block_names = list(agent.blocks.keys())
     repo = get_active_repo() or "(default cwd)"
+    provider_id = selected_provider()
+    model_id = selected_model()
+    fb_provider_id = selected_fallback_provider()
+    fb_model_id = selected_fallback_model()
+    provider_label = PROVIDERS[provider_id].label if provider_id in PROVIDERS else provider_id
+    fb_label = PROVIDERS[fb_provider_id].label if fb_provider_id in PROVIDERS else fb_provider_id
 
     config_details = f"""
     [bold]OSCAR Configuration:[/bold]
 
     [bold]Agent:[/bold]
-    Model: [cyan]gemini-2.5-flash[/cyan] (Vertex AI)
+    Provider: [cyan]{provider_label}[/cyan]
+    Model: [cyan]{model_id}[/cyan]
+    Fallback: [cyan]{fb_label}[/cyan] / [cyan]{fb_model_id}[/cyan]
     Tools: [green]{tool_count}[/green] registered
     Memory blocks: [green]{', '.join(block_names)}[/green]
 
@@ -97,6 +116,37 @@ def show_config():
     Data: [dim]{Path('./data').resolve()}[/dim]
     """
     console.print(config_details)
+
+
+def show_providers():
+    """List supported LLM providers and models, marking the active selection."""
+    active_provider = selected_provider()
+    active_model = selected_model()
+    for info in PROVIDERS.values():
+        marker = " [bold green](active)[/bold green]" if info.id == active_provider else ""
+        api_note = ""
+        if info.api_key_env:
+            has_key = bool(os.getenv(info.api_key_env))
+            api_note = (
+                f" [dim](needs ${info.api_key_env}: "
+                + ("[green]set[/green]" if has_key else "[yellow]missing[/yellow]")
+                + ")[/dim]"
+            )
+        elif info.requires_local_server:
+            api_note = " [dim](local server)[/dim]"
+        console.print(f"\n[bold cyan]{info.label}[/bold cyan]  [dim]({info.id})[/dim]{marker}{api_note}")
+        console.print(f"  [dim]{info.description}[/dim]")
+        for m in info.models:
+            tag = ""
+            if m.id == active_model and info.id == active_provider:
+                tag = " [bold green]← current[/bold green]"
+            elif m.recommended:
+                tag = " [yellow]★[/yellow]"
+            console.print(f"  • [cyan]{m.id}[/cyan]{tag} — [dim]{m.description}[/dim]")
+    console.print(
+        "\n[dim]Switch by setting OSCAR_LLM_PROVIDER and OSCAR_LLM_MODEL in .env "
+        "(see .env.example for all keys).[/dim]"
+    )
 
 
 def handle_repo_command(rest: str) -> None:
@@ -128,7 +178,10 @@ def handle_repo_command(rest: str) -> None:
 
 def test_llm_connection():
     """Test LLM connection via Asterix agent."""
-    console.print("[yellow]Testing Gemini connection via Vertex AI...[/yellow]")
+    provider_id = selected_provider()
+    model_id = selected_model()
+    provider_label = PROVIDERS[provider_id].label if provider_id in PROVIDERS else provider_id
+    console.print(f"[yellow]Testing {provider_label} ({model_id})...[/yellow]")
     try:
         from oscar.core.agent import get_agent
 
@@ -263,8 +316,11 @@ def main(ctx, debug, config_check, repo):
 
             agent = get_agent()
             tool_count = len(agent.get_all_tools())
+            provider_id = selected_provider()
+            model_id = selected_model()
+            provider_label = PROVIDERS[provider_id].label if provider_id in PROVIDERS else provider_id
             console.print(f"[green]OK[/green] Agent initialized with {tool_count} tools")
-            console.print("[green]OK[/green] Model: gemini-2.5-flash (Vertex AI)")
+            console.print(f"[green]OK[/green] Provider: {provider_label} ({provider_id}/{model_id})")
             console.print(f"[green]OK[/green] Memory blocks: {list(agent.blocks.keys())}")
             console.print(f"[green]OK[/green] Active repo: {get_active_repo() or '(default)'}")
             return
@@ -288,6 +344,8 @@ def main(ctx, debug, config_check, repo):
                     display_help()
                 elif first_word == "config":
                     show_config()
+                elif first_word in ("providers", "models"):
+                    show_providers()
                 elif first_word == "repo":
                     handle_repo_command(user_input[len(first_word):])
                 elif first_word == "test":

@@ -5,6 +5,7 @@ import {
     ReviewResponse,
     HistoryResponse,
     HealthResponse,
+    ProvidersResponse,
     StreamEvent,
 } from "./types";
 
@@ -34,6 +35,16 @@ export class OscarClient {
                 ? `?repo_path=${encodeURIComponent(this.repoPath)}`
                 : "";
             return await this.request<HealthResponse>(`/health${qs}`, {
+                method: "GET",
+            });
+        } catch {
+            return null;
+        }
+    }
+
+    async getProviders(): Promise<ProvidersResponse | null> {
+        try {
+            return await this.request<ProvidersResponse>("/providers", {
                 method: "GET",
             });
         } catch {

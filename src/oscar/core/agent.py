@@ -18,12 +18,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
 
-# Apply Asterix patches (idempotent — adds Gemini/Vertex AI support)
+# Apply Asterix patches (idempotent — adds multi-provider LLM support)
 import oscar.core.asterix_patch  # noqa: F401
 
 from asterix import Agent, BlockConfig
 
 from oscar.config.prompts import SYSTEM_PROMPT
+from oscar.config.providers import (
+    asterix_model_string,
+    selected_model,
+    selected_provider,
+)
 from oscar.core.events import emit as emit_event
 from oscar.core.safety import assess_risk, on_before_tool_call
 from oscar.config.settings import settings
@@ -41,7 +46,8 @@ from oscar.tools.browser import (
 
 logger = logging.getLogger(__name__)
 
-# LLM provider is Gemini/Vertex AI sole supported provider; llm_config.yaml was removed.
+# LLM provider/model is chosen at runtime from oscar.config.providers (env-driven).
+# See OSCAR_LLM_PROVIDER / OSCAR_LLM_MODEL in .env.example for the full list.
 
 # ---------------------------------------------------------------------------
 # Audit logging
@@ -312,9 +318,11 @@ def _create_agent() -> Agent:
         working_directory=str(Path.cwd()),
     )
 
+    provider_id = selected_provider()
+    model_id = selected_model()
     agent = Agent(
         agent_id="oscar",
-        model="gemini/gemini-2.5-flash",
+        model=asterix_model_string(provider_id, model_id),
         blocks={
             "session_context": BlockConfig(
                 size=4000, priority=1,
@@ -361,8 +369,8 @@ def _create_agent() -> Agent:
 
     tool_count = len(agent.get_all_tools())
     logger.info(
-        "OSCAR agent initialized with %s tools (Asterix + Gemini 2.5 Flash via Vertex AI)",
-        tool_count,
+        "OSCAR agent initialized with %s tools (provider=%s, model=%s)",
+        tool_count, provider_id, model_id,
     )
     return agent
 

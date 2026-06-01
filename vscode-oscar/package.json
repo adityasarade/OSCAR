@@ -1,8 +1,8 @@
 {
   "name": "oscar-assistant",
   "displayName": "OSCAR - GitHub Coding Assistant",
-  "description": "AI-powered GitHub-specialized coding assistant",
-  "version": "0.5.0",
+  "description": "AI-powered GitHub-specialized coding assistant with multi-provider LLM support (Gemini, OpenAI GPT-5.5/5.4, Claude 4.8/4.6, Groq, Ollama)",
+  "version": "0.6.2",
   "publisher": "adityasarade",
   "engines": {
     "vscode": "^1.85.0"
@@ -17,7 +17,14 @@
     "ai",
     "coding-assistant",
     "git",
-    "code-review"
+    "code-review",
+    "gemini",
+    "openai",
+    "gpt-5",
+    "claude",
+    "anthropic",
+    "ollama",
+    "llm"
   ],
   "repository": {
     "type": "git",
@@ -57,7 +64,14 @@
           "description": "URL of the OSCAR backend server"
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "oscar.selectModel",
+        "title": "OSCAR: Select LLM provider and model",
+        "category": "OSCAR"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

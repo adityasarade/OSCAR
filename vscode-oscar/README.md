@@ -10,6 +10,7 @@ AI-powered sidebar assistant for GitHub repository operations. Compare branches,
 - **Shell commands** — run tests, builds, and scripts with safety confirmation
 - **Web search** — look up documentation and error messages
 - **Persistent memory** — remembers context across sessions
+- **Bring your own LLM** — Gemini, OpenAI GPT-5, Anthropic Claude 4, Groq, or local Ollama; switch from the status-bar
 
 ## Getting Started
 
@@ -28,6 +29,12 @@ AI-powered sidebar assistant for GitHub repository operations. Compare branches,
 |---------|---------|-------------|
 | `oscar.serverUrl` | `http://127.0.0.1:8420` | URL of the OSCAR backend server |
 
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `OSCAR: Select LLM provider and model` | Pick a provider/model from the catalog. Selected env vars are copied to your clipboard for pasting into `.env` (the backend is restarted to apply). |
+
 ## Example Queries
 
 - "Show me the git status"
@@ -39,7 +46,7 @@ AI-powered sidebar assistant for GitHub repository operations. Compare branches,
 
 ## Architecture
 
-OSCAR uses the [Asterix](https://github.com/adityasarade/Asterix) agentic framework with Gemini 2.5 Flash (Vertex AI) for intelligent tool routing. The extension communicates with a FastAPI backend that wraps the Asterix agent.
+OSCAR uses the [Asterix](https://github.com/adityasarade/Asterix) agentic framework with pluggable LLM backends — Gemini (default), OpenAI GPT-5, Anthropic Claude 4, Groq, or local Ollama. The extension communicates with a FastAPI backend that wraps the Asterix agent. Switch providers from the status-bar at any time.
 
 ## Safety
 
